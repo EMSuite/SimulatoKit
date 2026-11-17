@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/EMSuite/SimulatoKit/actions/workflows/ci.yml/badge.svg)](https://github.com/EMSuite/SimulatoKit/actions/workflows/ci.yml)
 [![Docs](https://github.com/EMSuite/SimulatoKit/actions/workflows/docs.yml/badge.svg)](https://emsuite.github.io/SimulatoKit/documentation/)
-[![Release](https://img.shields.io/github/v/tag/mac4DSTEM/SimulatoKit?label=release&sort=semver)](https://github.com/EMSuite/SimulatoKit/tags)
+[![Release](https://img.shields.io/github/v/tag/EMSuite/SimulatoKit?label=release&sort=semver)](https://github.com/EMSuite/SimulatoKit/tags)
 [![Licence: GPL-3.0-only](https://img.shields.io/badge/licence-GPL--3.0--only-blue)](LICENSE)
 
 A Swift package for simulating electron scattering on Apple platforms: projected potentials, multislice propagation,
