@@ -58,4 +58,3 @@ struct MetalLimitsTests {
         #expect(!MetalLimits.scatterIndexFits(elements: 3000, points: 1 << 20))
     }
 }
-

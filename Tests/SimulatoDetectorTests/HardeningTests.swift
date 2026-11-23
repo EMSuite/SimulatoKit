@@ -131,4 +131,3 @@ struct DetectorTrapTests {
         #expect(try phonons.configuration(1).atoms.count == 1)
     }
 }
-
