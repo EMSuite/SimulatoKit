@@ -1,0 +1,4 @@
+# Arrays tools/pins/compare.py holds at float32 bounds (rtol 1e-6, atol 1e-7 of the array's largest magnitude), one
+# `<file>:<array name glob>` per line. Each is a float32 computation stored as float64, so it carries float32 rounding that
+# moves between machines.
+slice-2-arrays.bin:*.DPC*   # abTEM accumulates the segmented detector in float32 with numba fastmath, even in float64 mode (stem-detectors/pins.py)

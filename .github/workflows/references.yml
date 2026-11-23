@@ -1,0 +1,48 @@
+# The Linux reference job: rebuild every committed Python reference from the pinned environment (tools/requirements.txt:
+# abTEM 1.0.10, NumPy 2.5.4, SciPy 1.18.1, ASE 3.29.0) and fail when one differs beyond float noise.
+# tools/pins/compare.py states what float noise is: the committed files were written on a Mac, this runs on Linux, and the
+# two differ in the last bits of a float64. It takes no macOS runner.
+name: References
+
+on:
+  schedule:
+    - cron: "23 3 * * 1"   # weekly, Monday
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/references.yml"
+      - "tools/pins/**"
+      - "tools/requirements.txt"
+      - "Tests/SimulatoKitParityTests/Fixtures/**"
+      - "Sources/SimulatoMultislice/LobatoTable.swift"
+
+concurrency:
+  group: references-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  regenerate:
+    name: Regenerate the Python references
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/requirements.txt
+      - name: Pinned environment
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -r tools/requirements.txt
+          .venv/bin/pip list | grep -iE '^(abtem|numpy|scipy|ase) '
+      - name: Test the comparison
+        run: .venv/bin/python -I -B tools/pins/test_compare.py
+      - name: Regenerate
+        run: tools/pins/regenerate.sh
+      - name: Compare with the committed references
+        run: .venv/bin/python -I -B tools/pins/compare.py
