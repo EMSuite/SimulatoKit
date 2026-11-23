@@ -22,7 +22,7 @@ Current release: **0.5.0**. API reference (DocC, one catalogue per module):
 
 | Product | What it does |
 |---|---|
-| `SimulatoCore` | the electron beam (wavelength, interaction parameter), grids of any length from 2, complex and real fields, waves (intensity, diffraction pattern, beam tilt, Fourier resampling `Waves.resampled`), the antialias aperture, a minimal orthogonal-cell `AtomicStructure`, a float64 FFT; on images: `integratingGradient`, `integrateDisc`, `tiled` |
+| `SimulatoCore` | the electron beam (wavelength, interaction parameter), grids of any length from 2, complex and real fields, waves (intensity, diffraction pattern, beam tilt, Fourier resampling `Waves.resampled`), the antialias aperture, a minimal orthogonal-cell `AtomicStructure`, a crystal cell (`CrystalCell`) turned to a zone axis and cut into an orthogonal slab (`SlabBuilder`, abTEM's `orthogonalize_cell`), a float64 FFT; on images: `integratingGradient`, `integrateDisc`, `tiled` |
 | `SimulatoMultislice` | the Lobato parameterisation, slicing, the projected potential (from a grid or a sampling), transmission and Fresnel propagation, `Multislice.run` / `runBatch` on `.cpu` and `.metal`, frozen phonons, `ExecutionOptions` and `MetalAccuracy` |
 | `SimulatoProbe` | the soft aperture, polar aberrations C10 to C56, the probe at a position, `GridScan` and `LineScan`, `ContrastTransferFunction` (envelopes, Scherzer defocus, point resolution) and `Waves.applying` for HRTEM |
 | `SimulatoDetector` | annular (BF, ADF, HAADF), pixelated (4D-STEM), segmented (DPC), `CenterOfMassDetector` and `WavesDetector` (the exit wave at every position); `STEM.scan` over a grid or a line, averaged over frozen-phonon configurations; line interpolation (`interpolateLine`) and line profiles (`lineProfiles(for:)`), integrated centre of mass (`integratedCenterOfMass`), Gaussian source size and Poisson noise |
@@ -172,9 +172,10 @@ Numbers are held to the Python reference within its own tolerance; `docs/parity.
 - Metal's float32 FFT is not exactly unitary (it loses about 8e−7 of the total intensity per slice; a per-step
   renormalisation brings that to 5e−7 or less); the Metal bounds are registered to 100 slices, and past 300 slices the
   pattern error exceeds its bound.
-- Cells are orthogonal and always periodic; atoms in the gap of a short slice list are kept (abTEM drops them);
-  `.afterSlices` always adds the last slice. Finite projections, rotated or cut cells and some of abTEM's options are not
-  ported (`docs/parity.md`). `AtomicStructure` and the example's CIF reader are minimal local stand-ins.
+- Potentials take orthogonal, always periodic boxes; a general crystal cell is turned to its zone axis and cut by
+  `SlabBuilder` first (strain at most 0.1 % by default, partly occupied sites refused). Atoms in the gap of a short slice
+  list are kept (abTEM drops them); `.afterSlices` always adds the last slice. Finite projections and some of abTEM's
+  options are not ported (`docs/parity.md`). `AtomicStructure` and the example's CIF reader are minimal local stand-ins.
 
 ## Known limits
 

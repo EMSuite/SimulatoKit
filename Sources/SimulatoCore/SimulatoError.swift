@@ -27,6 +27,20 @@ public enum SimulatoError: Error, Sendable, Equatable, CustomStringConvertible {
     /// A resampled wave of `rows` × `columns` points needs `required` bytes, more than the `limit` allowed (`Int.max`
     /// bytes for a size that overflows).
     case gridTooLarge(rows: Int, columns: Int, required: Int, limit: Int)
+    /// A crystal cell the slab builder cannot use, with the reason.
+    case invalidCell(String)
+    /// A zone axis with no direction.
+    case invalidZoneAxis(String)
+    /// Repetitions for the orthogonal-cell search outside 1 ... 64.
+    case invalidRepetitions(Int)
+    /// A strain limit that is not finite and non-negative.
+    case invalidStrain(Double)
+    /// No orthogonal unit within the repetitions holds the strain limit; `strain` is the least found, at `repetitions`.
+    case strainTooLarge(strain: Double, maximum: Double, repetitions: Int)
+    /// A site that is only partly occupied (the slab builder takes whole atoms).
+    case partialOccupancy(site: Int, occupancy: Double)
+    /// A slab of `count` atoms, more than the `limit` allowed.
+    case tooManyAtoms(count: Int, limit: Int)
 
     public var description: String {
         switch self {
@@ -52,6 +66,15 @@ public enum SimulatoError: Error, Sendable, Equatable, CustomStringConvertible {
         case .invalidDetector(let why): return "invalid detector: \(why)"
         case .gridTooLarge(let r, let c, let need, let limit):
             return "a wave of \(r) x \(c) points needs \(need) bytes, more than the \(limit) bytes allowed (half of the physical memory)"
+        case .invalidCell(let why): return "invalid crystal cell: \(why)"
+        case .invalidZoneAxis(let why): return "invalid zone axis: \(why)"
+        case .invalidRepetitions(let n): return "repetitions must lie in 1 ... 64, got \(n)"
+        case .invalidStrain(let s): return "the strain limit must be finite and non-negative, got \(s)"
+        case .strainTooLarge(let s, let limit, let n):
+            return "no orthogonal cell holds the strain limit of \(limit * 100) %: the least strain is \(s * 100) % at \(n) repetitions"
+        case .partialOccupancy(let i, let o):
+            return "site \(i) is only partly occupied (\(o)); the slab takes whole atoms"
+        case .tooManyAtoms(let n, let limit): return "the slab would hold \(n) atoms, more than the \(limit) allowed"
         }
     }
 }
