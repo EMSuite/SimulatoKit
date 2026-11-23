@@ -13,7 +13,7 @@ public struct Potential: Sendable, Hashable {
     public let grid: Grid
     /// The thickness of every slice [Å].
     public let sliceThicknesses: [Double]
-    public let parameterization: LobatoParameterization
+    public let parameterization: Parameterization
     /// The atoms wrapped into the box, in the structure's atom order.
     public let atoms: [AtomicStructure.Atom]
     /// The slice of each atom, in the same order.
@@ -21,7 +21,7 @@ public struct Potential: Sendable, Hashable {
 
     /// Slices of `sliceThickness` (abTEM's rule: ⌈Lz / s⌉ equal slices), at most `maximumSliceCount`.
     public init(structure: AtomicStructure, nx: Int, ny: Int, sliceThickness: Double,
-                parameterization: LobatoParameterization = LobatoParameterization(),
+                parameterization: Parameterization = .standard,
                 maximumSliceCount: Int = Slicing.maximumSliceCount) throws {
         let t = try Slicing.thicknesses(depth: structure.box.z, requested: sliceThickness, maximumCount: maximumSliceCount)
         try self.init(structure: structure, nx: nx, ny: ny, sliceThicknesses: t, parameterization: parameterization,
@@ -30,7 +30,7 @@ public struct Potential: Sendable, Hashable {
 
     /// The grid from a target `sampling` [Å] (abTEM's `Potential(sampling=)`): ⌈box / sampling⌉ points per axis.
     public init(structure: AtomicStructure, sampling: Double, sliceThickness: Double,
-                parameterization: LobatoParameterization = LobatoParameterization(),
+                parameterization: Parameterization = .standard,
                 maximumSliceCount: Int = Slicing.maximumSliceCount) throws {
         try self.init(structure: structure, sampling: (sampling, sampling), sliceThickness: sliceThickness,
                       parameterization: parameterization, maximumSliceCount: maximumSliceCount)
@@ -38,7 +38,7 @@ public struct Potential: Sendable, Hashable {
 
     /// The same with a sampling per axis (x, y).
     public init(structure: AtomicStructure, sampling: (x: Double, y: Double), sliceThickness: Double,
-                parameterization: LobatoParameterization = LobatoParameterization(),
+                parameterization: Parameterization = .standard,
                 maximumSliceCount: Int = Slicing.maximumSliceCount) throws {
         let grid = try Grid(extentX: structure.box.x, extentY: structure.box.y, samplingX: sampling.x, samplingY: sampling.y)
         try self.init(structure: structure, nx: grid.nx, ny: grid.ny, sliceThickness: sliceThickness,
@@ -47,11 +47,11 @@ public struct Potential: Sendable, Hashable {
 
     /// The given slice thicknesses (they must sum to the box's depth), at most `maximumSliceCount`.
     public init(structure: AtomicStructure, nx: Int, ny: Int, sliceThicknesses: [Double],
-                parameterization: LobatoParameterization = LobatoParameterization(),
+                parameterization: Parameterization = .standard,
                 maximumSliceCount: Int = Slicing.maximumSliceCount) throws {
         let grid = try Grid(nx: nx, ny: ny, extentX: structure.box.x, extentY: structure.box.y)
         let thicknesses = try Slicing.validated(sliceThicknesses, depth: structure.box.z, maximumCount: maximumSliceCount)
-        for a in structure.atoms where !LobatoParameterization.supports(atomicNumber: a.atomicNumber) {
+        for a in structure.atoms where !parameterization.supports(atomicNumber: a.atomicNumber) {
             throw SimulatoError.unsupportedElement(a.atomicNumber)
         }
         let atoms = Slicing.wrapped(structure)

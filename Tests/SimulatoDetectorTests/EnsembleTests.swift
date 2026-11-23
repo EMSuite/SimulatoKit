@@ -59,7 +59,7 @@ struct EnsembleTests {
         let structure = try aluminiumStructure(cells: (1, 1, 2))
         let phonons = try FrozenPhonons(structure: structure, sigmas: [13: 0.1], configurations: 2, seed: 5)
         let potentials = try phonons.lazyPotentials(nx: 48, ny: 48, sliceThickness: 2.025,
-                                                    parameterization: LobatoParameterization(piConstant: .abTEMFloat32))
+                                                    parameterization: .lobato(LobatoParameterization(piConstant: .abTEMFloat32)))
         let detector = try WavesDetector(rows: 16, columns: 16)
         let ensemble = try STEM.scanFrozenPhonons(probe: probe, potentials: potentials, scan: scan, detector: detector)
         #expect(ensemble.count == 2)

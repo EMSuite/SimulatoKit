@@ -72,7 +72,7 @@ struct PotentialProjectTileTests {
 
     @Test func aluminiumProjectionMatchesAbTEM() throws {
         let potential = try Potential(structure: aluminiumStructure(cells: (1, 1, 2)), nx: 16, ny: 16, sliceThickness: 2.025,
-                                      parameterization: LobatoParameterization(piConstant: .abTEMFloat32))
+                                      parameterization: .lobato(LobatoParameterization(piConstant: .abTEMFloat32)))
         let p = try potential.project()
         #expect(p == (try potential.build().project()), "the lazy projection is the built one")
         #expect(potential.sliceCount == 4)

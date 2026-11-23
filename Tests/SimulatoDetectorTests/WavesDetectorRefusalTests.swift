@@ -17,7 +17,7 @@ struct WavesDetectorRefusalTests {
     /// Two Al cells along z on 48 x 48, a/2 slices, 200 keV, 20 mrad: the waves pins' setup.
     static func setup() throws -> (probe: Probe, potential: Potential) {
         let potential = try Potential(structure: aluminiumStructure(cells: (1, 1, 2)), nx: 48, ny: 48, sliceThickness: 2.025,
-                                      parameterization: LobatoParameterization(piConstant: .abTEMFloat32))
+                                      parameterization: .lobato(LobatoParameterization(piConstant: .abTEMFloat32)))
         let probe = try Probe(beam: ElectronBeam(energy: 200e3), grid: potential.grid, aperture: Aperture(semiangleCutoff: 20))
         return (probe, potential)
     }

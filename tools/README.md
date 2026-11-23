@@ -45,6 +45,7 @@ committed fixtures were written on a Mac; Linux reproduces them to float noise (
 | `pins/linescan/pins.py` | `linescan-pins.json`, `linescan-arrays.bin` |
 | `pins/icom/pins.py` | `icom-pins.json`, `icom-arrays.bin` |
 | `pins/slab/pins.py` | `slab-pins.json`, `slab-arrays.bin` |
+| `pins/kirkland/pins.py` | `kirkland-pins.json`, `kirkland-arrays.bin`, `Sources/SimulatoMultislice/KirklandTable.swift` (reads `slab-pins.json`, so runs after `slab`) |
 | `pins/potential-project-tile/pins.py` | none: prints the numbers `SimulatoMultisliceTests/PotentialProjectTileTests.swift` holds inline |
 | `pins/polar/pins.py` | none: prints the numbers `SimulatoDetectorTests/PolarMeasurementTests.swift` holds inline |
 | `pins/crystal-slices/pins.py` | none: prints the numbers `SimulatoMultisliceTests/CrystalSliceThicknessTests.swift` holds inline |

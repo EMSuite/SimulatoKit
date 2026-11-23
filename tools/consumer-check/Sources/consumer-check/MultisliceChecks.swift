@@ -57,6 +57,34 @@ func checkMultislice(_ r: inout Report) {
         }
     }
 
+    r.section("Multislice: Kirkland parameterisation and the choice") { r in
+        r.check("supports Z = 1, 14, 103; not 0, 104",
+                [1, 14, 103].allSatisfy { KirklandParameterization.supports(atomicNumber: $0) }
+                && ![0, 104].contains { KirklandParameterization.supports(atomicNumber: $0) })
+        let p = try KirklandParameterization.parameters(atomicNumber: 14)
+        let s = try KirklandParameterization.scaledParameters(atomicNumber: 14)
+        r.check("parameters and scaledParameters: three terms of a, b, c, d",
+                [p.a, p.b, p.c, p.d, s.a, s.b, s.c, s.d].allSatisfy { $0.count == 3 })
+        let exact = KirklandParameterization()
+        let pi: KirklandParameterization.PiConstant = .exact
+        r.equal("default piConstant is .exact", exact.piConstant, pi)
+        r.nearRelative("Si f(0) = 278.3742323275066 (abTEM 1.0.10)",
+                       try KirklandParameterization(piConstant: .abTEMFloat32).projectedScatteringFactor(atomicNumber: 14, k2: 0),
+                       278.3742323275066, 1e-14)
+        r.equal("float32PiSquared = 9.86960506439209", KirklandParameterization.float32PiSquared, 9.86960506439209)
+        let kirkland = Parameterization.kirkland(exact)
+        r.check("Parameterization: .standard is Lobato with the exact π; cases compare",
+                Parameterization.standard == .lobato(LobatoParameterization()) && kirkland != .standard)
+        r.nearRelative("Parameterization.projectedScatteringFactor forwards to the case",
+                       try kirkland.projectedScatteringFactor(atomicNumber: 14, k2: 0.5),
+                       try exact.projectedScatteringFactor(atomicNumber: 14, k2: 0.5), 0)
+        r.check("Parameterization.supports", kirkland.supports(atomicNumber: 103) && !kirkland.supports(atomicNumber: 104))
+        r.refuses("parameters(atomicNumber: 104)", .unsupportedElement(104)) { try KirklandParameterization.parameters(atomicNumber: 104) }
+        let potential = try Potential(structure: singleAtomStructure(z: 14), nx: 32, ny: 32, sliceThickness: 2,
+                                      parameterization: kirkland)
+        r.check("Potential keeps .kirkland", potential.parameterization == kirkland)
+    }
+
     r.section("Multislice: slicing") { r in
         r.equal("Slicing.maximumSliceCount", Slicing.maximumSliceCount, 1_000_000)
         // ⌈10 / 3⌉ = 4 slices of 2.5
@@ -105,7 +133,7 @@ func checkMultislice(_ r: inout Report) {
         r.check("init(sliceThicknesses: [1, 3]): two slices, atom z = 2 in slice 1", explicit.slices.map(\.thickness) == [1, 3]
                 && explicit.sliceOfAtom == [1])
         let f32 = try ProjectedPotential(structure: s, nx: 32, ny: 32, sliceThickness: 2,
-                                         parameterization: LobatoParameterization(piConstant: .abTEMFloat32))
+                                         parameterization: .lobato(LobatoParameterization(piConstant: .abTEMFloat32)))
         let d = maxDifference(f32.slices[1].values, v.slices[1].values)
         r.check("parameterization: .abTEMFloat32 differs from .exact by under 1e-6 relative", d > 0
                 && d < 1e-6 * (v.slices[1].values.max() ?? 1), "got \(d)")
@@ -239,7 +267,7 @@ func checkMultislice(_ r: inout Report) {
         r.check("σ = 0: FrozenPhonons.potentials equal the static potential",
                 ensemble.count == 2 && ensemble.allSatisfy { $0 == static_ })
         let ensemble32 = try still.potentials(nx: 32, ny: 32, sliceThickness: 2,
-                                              parameterization: LobatoParameterization(piConstant: .abTEMFloat32))
+                                              parameterization: .lobato(LobatoParameterization(piConstant: .abTEMFloat32)))
         r.check("potentials(parameterization:) is passed on", ensemble32[0] != static_)
         // the same seed, the same ensemble; another seed, another one; consecutive seeds do not share configurations
         let a = try FrozenPhonons(structure: s, sigmas: [13: 0.1, 8: 0.1], configurations: 3, seed: 5)
@@ -311,7 +339,7 @@ func checkMultislice(_ r: inout Report) {
         r.check("atoms wrapped, one slice each, atoms(inSlice:) partitions them",
                 lazy.atoms.count == 8 && lazy.sliceOfAtom == eager.sliceOfAtom
                 && (0..<4).map { lazy.atoms(inSlice: $0).count }.reduce(0, +) == 8)
-        r.check("parameterization kept", lazy.parameterization == LobatoParameterization())
+        r.check("parameterization kept", lazy.parameterization == .standard && lazy.parameterization == .lobato(LobatoParameterization()))
         let wave = Waves.planeWave(beam: beam, grid: lazy.grid)
         let a = try Multislice.run(wave, through: lazy, exitPlanes: .every(2))
         let b = try Multislice.run(wave, through: eager, exitPlanes: .every(2))

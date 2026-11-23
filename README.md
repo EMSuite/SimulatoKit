@@ -10,7 +10,7 @@
 A Swift package for simulating electron scattering on Apple platforms: projected potentials, multislice propagation,
 frozen phonons, probes with aberrations, STEM scans with detectors, and the contrast transfer function for HRTEM images.
 It is a port of [abTEM](https://github.com/abtem/abtem) 1.0.10, checked against abTEM in float64 (Python reference, pinned
-inputs). The algorithms and the Lobato–Van Dyck (2014) parameters are abTEM's; credit
+inputs). The algorithms and the Lobato–Van Dyck (2014) and Kirkland (2010) parameters are abTEM's; credit
 for the method belongs to the abTEM authors. Licence: GPL-3.0-only (`LICENSE`, `NOTICE`); software built on
 SimulatoKit must be GPL-compatible. It is a library of numbers, not an application, and has no UI. It stands alone: it
 depends on no other package, and no other package depends on it yet.
@@ -23,7 +23,7 @@ Current release: **0.5.0**. API reference (DocC, one catalogue per module):
 | Product | What it does |
 |---|---|
 | `SimulatoCore` | the electron beam (wavelength, interaction parameter), grids of any length from 2, complex and real fields, waves (intensity, diffraction pattern, beam tilt, Fourier resampling `Waves.resampled`), the antialias aperture, a minimal orthogonal-cell `AtomicStructure`, a crystal cell (`CrystalCell`) turned to a zone axis and cut into an orthogonal slab (`SlabBuilder`, abTEM's `orthogonalize_cell`), a float64 FFT; on images: `integratingGradient`, `integrateDisc`, `tiled` |
-| `SimulatoMultislice` | the Lobato parameterisation, slicing, the projected potential (from a grid or a sampling), transmission and Fresnel propagation, `Multislice.run` / `runBatch` on `.cpu` and `.metal`, frozen phonons, `ExecutionOptions` and `MetalAccuracy` |
+| `SimulatoMultislice` | the Lobato (default) and Kirkland parameterisations (`Parameterization`), slicing, the projected potential (from a grid or a sampling), transmission and Fresnel propagation, `Multislice.run` / `runBatch` on `.cpu` and `.metal`, frozen phonons, `ExecutionOptions` and `MetalAccuracy` |
 | `SimulatoProbe` | the soft aperture, polar aberrations C10 to C56, the probe at a position, `GridScan` and `LineScan`, `ContrastTransferFunction` (envelopes, Scherzer defocus, point resolution) and `Waves.applying` for HRTEM |
 | `SimulatoDetector` | annular (BF, ADF, HAADF), pixelated (4D-STEM), segmented (DPC), `CenterOfMassDetector` and `WavesDetector` (the exit wave at every position); `STEM.scan` over a grid or a line, averaged over frozen-phonon configurations; line interpolation (`interpolateLine`) and line profiles (`lineProfiles(for:)`), integrated centre of mass (`integratedCenterOfMass`), Gaussian source size and Poisson noise |
 
@@ -74,7 +74,8 @@ Accelerate framework, and the GPU backend uses Metal and MPSGraph.
 
 SimulatoKit is a port of abTEM. If you use it in published work, please cite abTEM: J. Madsen and T. Susi, "The abTEM
 code: transmission electron microscopy from first principles", Open Research Europe 1, 24 (2021), and, for the
-scattering parameters, I. Lobato and D. Van Dyck, Acta Cryst. A 70, 636-649 (2014), doi:10.1107/S205327331401643X.
+scattering parameters, I. Lobato and D. Van Dyck, Acta Cryst. A 70, 636-649 (2014), doi:10.1107/S205327331401643X, or, with
+`.kirkland`, E. J. Kirkland, Advanced Computing in Electron Microscopy, 2nd ed., Springer (2010), doi:10.1007/978-1-4419-6533-2.
 `CITATION.cff` has the same references in machine-readable form.
 
 ## Quick start
@@ -163,7 +164,7 @@ Every choice the kit makes has a parameter, and the default is the value the num
 and shapes, the CPU scan's chunk, the Metal renormalisation and executable cache, the progress interval), `MetalAccuracy.registered` (the
 Metal-against-CPU bounds the tests hold), `Grid.matches(_:relativeTolerance:)`, the slice ceiling (`maximumSliceCount:`)
 and the constants of `scherzerDefocus`, `pointResolution` and `nyquistSampling`. abTEM's own conventions (the antialias
-aperture, the slicing rules, the π choice in `LobatoParameterization`) stay as abTEM defines them.
+aperture, the slicing rules, the π choice in `LobatoParameterization` and `KirklandParameterization`) stay as abTEM defines them.
 
 ```swift
 // continuing the quick start: its 256 probe positions as a batch, with smaller Metal batches and fewer CPU threads

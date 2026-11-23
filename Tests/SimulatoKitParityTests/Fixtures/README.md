@@ -3,7 +3,7 @@
 Every committed fixture of the kit lives in this folder and is read by `SimulatoKitParityTests` (the target excludes the
 folder from its sources; the tests open the files by path). Each `*-pins.json` holds the scalars, shapes, versions and the
 index into its `*-arrays.bin` sidecar (float64 little-endian, complex as interleaved re, im), whose sha256 the JSON records.
-18 files, 20.1 MB.
+20 files, 20.5 MB.
 
 Every file is regenerated in place by the generator named in its row, from the repo root with the environment in
 `tools/README.md`: `.venv/bin/python -I -B tools/pins/<subject>/pins.py`. A regeneration that changes an `*-arrays.bin`
@@ -32,5 +32,7 @@ GPL-3.0-only licence. No fixture is measured data, and the text fixtures carry n
 | `icom-arrays.bin` | 41.6 KB | `tools/pins/icom/pins.py` | |
 | `slab-pins.json` | 199.0 KB | `tools/pins/slab/pins.py` | orthogonal units along zone axes, the repetition ladder, the Si [110] slab |
 | `slab-arrays.bin` | 92.2 KB | `tools/pins/slab/pins.py` | |
+| `kirkland-pins.json` | 127.5 KB | `tools/pins/kirkland/pins.py` | the Kirkland parameterisation: f(k²) for Z = 1 to 103, single atoms, the Si [110] slab's exit wave |
+| `kirkland-arrays.bin` | 183.8 KB | `tools/pins/kirkland/pins.py` | (the generator also writes `Sources/SimulatoMultislice/KirklandTable.swift`) |
 
 The file names keep the development slice they were written in (`slice-N`); the tests open them by these names.

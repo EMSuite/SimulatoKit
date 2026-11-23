@@ -41,3 +41,13 @@ references:
     end: 649
     year: 2014
     doi: "10.1107/S205327331401643X"
+  - type: book
+    title: "Advanced Computing in Electron Microscopy"
+    authors:
+      - family-names: Kirkland
+        given-names: E. J.
+    edition: "2"
+    publisher:
+      name: Springer
+    year: 2010
+    doi: "10.1007/978-1-4419-6533-2"

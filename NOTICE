@@ -28,6 +28,9 @@ interaction parameter are ported from abTEM 1.0.10 (tag v1.0.10, commit
 tools/pins/potential-multislice/pins.py. The Lobato table in
 Sources/SimulatoMultislice/LobatoTable.swift is generated from abTEM's
 abtem/parametrizations/data/lobato.json.
+The Kirkland table in Sources/SimulatoMultislice/KirklandTable.swift is
+generated from abTEM's abtem/parametrizations/data/kirkland.json and checked by
+tools/pins/kirkland/pins.py.
 
     abTEM - https://github.com/abtem/abtem
     Copyright (C) The abTEM developers (J. Madsen, T. Susi and contributors)
@@ -44,6 +47,14 @@ The Lobato and Van Dyck parameterisation
     that obey all physical constraints", Acta Cryst. A 70, 636-649 (2014),
     doi:10.1107/S205327331401643X. Parameters are published numbers, cited as
     such.
+
+================================================================================
+The Kirkland parameterisation
+================================================================================
+
+    E. J. Kirkland, "Advanced Computing in Electron Microscopy", 2nd ed.,
+    Springer (2010), Appendix C, doi:10.1007/978-1-4419-6533-2. Parameters are
+    published numbers, cited as such.
 
 ================================================================================
 Text

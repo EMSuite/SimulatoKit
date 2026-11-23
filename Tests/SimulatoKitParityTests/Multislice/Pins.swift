@@ -78,7 +78,7 @@ enum Pins {
         let g = c["gpts"] as! [Int]
         return try ProjectedPotential(structure: structure(id), nx: g[0], ny: g[1],
                                       sliceThickness: c["slice_thickness_requested"] as! Double,
-                                      parameterization: LobatoParameterization(piConstant: pi))
+                                      parameterization: .lobato(LobatoParameterization(piConstant: pi)))
     }
 
     static func beam(_ id: String) throws -> ElectronBeam {

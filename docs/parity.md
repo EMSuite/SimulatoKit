@@ -4,8 +4,8 @@ The coverage table of abTEM 1.0.10 (`References/python/abtem`, git `164e644`): i
 the source in `site-packages/abtem` against SimulatoKit. Rewritten for 0.3.0 (the growing phase's kit audit); every row
 has one state and one priority.
 
-**Totals (129 rows): 38 present, 41 partial, 50 missing.** By priority: **study** 27 rows (12 present, 8 partial, 7 missing);
-**useful** 80 (26, 33, 21); **not planned** 22 (all missing, each with its reason).
+**Totals (130 rows): 38 present, 42 partial, 50 missing.** By priority: **study** 27 rows (12 present, 8 partial, 7 missing);
+**useful** 81 (26, 34, 21); **not planned** 22 (all missing, each with its reason).
 
 States:
 
@@ -50,7 +50,7 @@ detector, the Gaussian source size and Poisson noise on a scan.
 
 | abTEM | SimulatoKit | State | Priority |
 |---|---|---|---|
-| `Potential(atoms, gpts, slice_thickness, parametrization="lobato", projection="infinite")`, the lazy potential, and its `device` | `Potential(structure:nx:ny:sliceThickness:parameterization:)`, `.build() -> ProjectedPotential` | **present**: the grid, the slice thicknesses, the wrapped atoms with their slice and the parameterisation, without the arrays; `build()` equals the former eager construction (asserted exactly today); on `.metal` the potential is built on the GPU (V within 1e−5 × max V of the CPU's) | useful |
+| `Potential(atoms, gpts, slice_thickness, parametrization="lobato" or "kirkland", projection="infinite")`, the lazy potential, and its `device` | `Potential(structure:nx:ny:sliceThickness:parameterization:)`, `.build() -> ProjectedPotential` | **present**: the grid, the slice thicknesses, the wrapped atoms with their slice and the parameterisation, without the arrays; `build()` equals the former eager construction (asserted exactly today); on `.metal` the potential is built on the GPU (V within 1e−5 × max V of the CPU's) | useful |
 | `ase.Atoms` as the atoms argument (cell, positions, numbers, `pbc`) | `AtomicStructure(box:atoms:)`, `.repeated(_:_:_:)` | **partial**: orthogonal (diagonal) boxes, atomic number and Cartesian position only; periodic on all axes (abTEM honours ASE's `pbc`); repeats in ASE's order; no ASE or CIF reader in the library; a local type on purpose (the kit stays standalone, `docs/adr/0001-standalone-structure-types.md`) | useful |
 | `Potential(slice_thickness=float or sequence)`, `SliceIndexedAtoms` | `sliceThickness:`, `sliceThicknesses:`, `Slicing.thicknesses`, `.validated`, `.wrapped`, `.sliceIndices` | **present**: ⌈Lz / s⌉ equal slices, or a list that must sum to Lz (NumPy `isclose`), periodic wrap, top-face rule; no default of 1 Å (the thickness is required); an atom in the gap of a short slice list is kept, abTEM drops it | useful |
 | `Potential(sampling=)` | `Potential(structure:sampling:sliceThickness:)` (one value or an (x, y) pair) | **present**: ⌈box / sampling⌉ points per axis, pinned against abTEM's gpts on six samplings (0.3.0) | study |
@@ -77,7 +77,8 @@ detector, the Gaussian source size and Poisson noise on a scan.
 |---|---|---|---|
 | `LobatoParametrization` (`projected_scattering_factor`, `scaled_parameters`) | `LobatoParameterization` (`projectedScatteringFactor(atomicNumber:k2:)`, static `scaledParameters(atomicNumber:)`, `parameters(atomicNumber:)`, `supports(atomicNumber:)`) | **partial**: neutral atoms (`charge` not offered), Z = 1 to 103, the shipped table only (`parameters=` custom JSON and `sigmas=` not offered); `.abTEMFloat32` bit-close, `.exact` (the default) registered at 1e−7 | useful |
 | `LobatoParametrization.potential`, `.projected_potential`, `.scattering_factor`, `.charge`, `.x_ray_scattering_factor`, `.finite_projected_potential`, `.line_profiles` | | **missing**: planned: SimulatoMultislice (the closed forms; `projected_potential` is the far-field truth's reference in the tests, evaluated in Python) | useful |
-| `KirklandParametrization`, `PengParametrization`, `EwaldParametrization` | | **missing**: planned: SimulatoMultislice | study |
+| `KirklandParametrization` (`projected_scattering_factor`, `scaled_parameters`), `Potential(parametrization="kirkland")` | `KirklandParameterization` (`projectedScatteringFactor(atomicNumber:k2:)`, static `scaledParameters(atomicNumber:)`, `parameters(atomicNumber:)`, `supports(atomicNumber:)`), `Parameterization.kirkland` on `Potential`, `ProjectedPotential` and `FrozenPhonons` | **partial**: Kirkland (2010) Appendix C, as abTEM ships it; neutral atoms, Z = 1 to 103, the shipped table only (`parameters=`, `sigmas=` and `fit` not offered), the infinite projection only (`potential`, `projected_potential`, `scattering_factor` not offered). Pinned (`tools/pins/kirkland/pins.py`): f(k²) and the scaled parameters for every Z within 1e−14 under both π choices; one O, Al, Si, Ti and Sr atom's projected potential within 1e−11 of its maximum; the Si [110] slab's exit wave (200 kV, 80 slices) within 1e−10 with `.abTEMFloat32`, 1e−6 with `.exact`; on `.metal` the potential within 1e−5 × max V of the CPU's | useful |
+| `PengParametrization`, `EwaldParametrization` | | **missing**: planned: SimulatoMultislice | study |
 | `Parametrization.sigmas`, `sigma_to_B`, `B_to_sigma`, `validate_sigmas` (Debye–Waller tables) | | **missing**: planned: SimulatoMultislice (σ is given by the caller per element today) | study |
 | `Parametrization(parameters)`, `.to_json`, `.from_json`, `.fit` | | **missing**: not planned: custom tables and fitting are research tools | not planned |
 
@@ -241,7 +242,8 @@ above.
   A handler changes no `.cpu` number (tested bit for bit) and no `.metal` kernel.
 - The constants of the CTF closed forms as parameters (`factor:` of `scherzerDefocus`, 1.5 by default as abTEM; `divisor:` of
   `pointResolution`, 6; `oversampling:` of `nyquistSampling`, 4).
-- `LobatoParameterization.PiConstant`: the exact π by default, abTEM's float32 π on request.
+- `LobatoParameterization.PiConstant` (shared by `KirklandParameterization`): the exact π by default, abTEM's float32 π on request.
+- `Parameterization`: `.standard` (Lobato, exact π) by default, `.kirkland` on request (abTEM's `parametrization=`).
 - The slab builder's choices around `orthogonalize_cell` (0.6.0): the turn to the zone axis (z along [u v w], pointing at
   the source; x along the shortest lattice row at right angles, the one closest to py4DSTEM's in-plane reference on a tie,
   py4DSTEM's reference when no row is at right angles; the orientation in DiffractoKit's and py4DSTEM's convention, checked
@@ -264,10 +266,13 @@ and parked for later (quiet-run benchmarks #5, real cells #6, FFT path #43). Spe
   beyond it nor falls back to `.cpu` (a 2048² run on the CPU takes hours): the caller decides, and the app marks such a result.
 - **Not ported:** `CrystalPotential` (a unit potential repeated, frozen phonons per cell; its API is undecided); non-orthogonal
   boxes in `AtomicStructure` and `periodic=False` (a crystal is turned and cut by `SlabBuilder` first; the kit keeps its own
-  structure types, `docs/adr/0001-standalone-structure-types.md`); finite projection; the Kirkland, Peng and Ewald parametrisations;
+  structure types, `docs/adr/0001-standalone-structure-types.md`); finite projection; the Peng and Ewald parametrisations;
   Debye–Waller tables; `PolarMeasurements.to_diffraction_patterns` and `azimuthal_limits`.
 - **Lobato π:** the pins use `LobatoParameterization(piConstant: .abTEMFloat32)`; with the default `.exact` results differ by
   about 2.6e−8 of the maximum.
+- **Kirkland π:** abTEM 1.0.10 takes π² inside Kirkland's f as the float32 square of the float32 π (9.86960506439209, not
+  the float32 π² of the Lobato function) and the exact π elsewhere; `.abTEMFloat32` reproduces it, the default `.exact`
+  moves f by up to about 2e−8 of its maximum (π² itself by 6.7e−8 relative).
 - **abTEM's cut drops atoms:** `orthogonalize_cell` cuts with ASE's `cut`, which wraps fractional coordinates with `% 1.0`;
   a coordinate a rounding error below zero lands on the far face of the new cell and is dropped (Al and Cu [111] keep 23
   of 24 atoms in abTEM 1.0.10). The kit takes the new cell's atoms by exact lattice arithmetic (det V × the cell's atoms,

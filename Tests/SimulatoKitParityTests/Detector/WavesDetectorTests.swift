@@ -65,7 +65,7 @@ enum WavesPins {
     static func setup() throws -> (probe: Probe, potential: Potential) {
         let n = json["gpts"] as! Int
         let potential = try Potential(structure: structure, nx: n, ny: n, sliceThickness: (json["sliceThickness"] as! NSNumber).doubleValue,
-                                    parameterization: LobatoParameterization(piConstant: .abTEMFloat32))
+                                    parameterization: .lobato(LobatoParameterization(piConstant: .abTEMFloat32)))
         let beam = try ElectronBeam(energy: (json["energy"] as! NSNumber).doubleValue)
         let probe = try Probe(beam: beam, grid: potential.grid,
                               aperture: Aperture(semiangleCutoff: (json["semiangle"] as! NSNumber).doubleValue))

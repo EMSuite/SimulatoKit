@@ -78,7 +78,7 @@ enum Pins3 {
             .init(atomicNumber: 8, position: SIMD3(0, 0.5, 0.5) * a0),
         ])
         let p = try ProjectedPotential(structure: cell.repeated(3, 3, 5), nx: 120, ny: 120, sliceThickness: 1.9525,
-                                       parameterization: LobatoParameterization(piConstant: pi))
+                                       parameterization: .lobato(LobatoParameterization(piConstant: pi)))
         return try Multislice.run(.planeWave(beam: ElectronBeam(energy: 300e3), grid: p.grid), through: p)[0]
     }
 }
