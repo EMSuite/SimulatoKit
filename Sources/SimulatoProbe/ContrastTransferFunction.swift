@@ -137,6 +137,7 @@ public struct ContrastTransferFunction: Sendable, Hashable {
 
 extension Waves {
     /// The waves with a CTF applied (abTEM's `apply_ctf`): IFFT(FFT(ψ) · H). The intensity of the result is the HRTEM image.
+    /// The result keeps the waves' beam, normalisation and tilt.
     public func applying(_ ctf: ContrastTransferFunction) throws -> Waves {
         let h = try ctf.kernel(on: grid, wavelength: beam.wavelength)
         let fft = try FFT2D(nx: grid.nx, ny: grid.ny)
@@ -148,6 +149,6 @@ extension Waves {
             f.imaginary[i] = a * d + b * c
         }
         fft.inverse(&f)
-        return Waves(field: f, grid: grid, beam: beam, normalization: normalization)
+        return Waves(field: f, grid: grid, beam: beam, normalization: normalization, tilt: tilt)
     }
 }

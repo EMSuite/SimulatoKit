@@ -118,7 +118,8 @@ diffraction intensities there too; one compiled step is encoded per slice, and t
 about 50 to 150 ms, so two Metal runs interleave between chunks. Without a Metal
 device it throws `SimulatoError.metalUnavailable` (`Multislice.metalIsAvailable` tells beforehand). The registered
 tolerances of Metal against the CPU: exit wave 1e−4, intensity, diffraction pattern and detector images 2e−4 relative to
-the maximum, total intensity 1.5e−6 per slice, up to 100 slices; measured, the wave
+the maximum, total intensity 1.5e−6 per slice, up to 100 slices and 1024² (`MetalAccuracy.registered.covers(nx:ny:slices:)`
+tells whether a run lies inside; beyond, it runs outside the tested tolerance); measured, the wave
 is within about 5e−5 and the total intensity within 5e−7 per slice (1.4e−7 on light elements) at up to 1024² with 100
 slices. Detector images are bounded by 2e−4 × max(their maximum, 1e−5 of the probe's intensity): weaker signals sit at
 float32's noise floor (`MetalAccuracy.registered.detectorBound(imageMaximum:incidentIntensity:)`).

@@ -360,6 +360,14 @@ func checkMultislice(_ r: inout Report) {
         let a1 = try Multislice.runBatch([wave, wave], through: lazy, options: ExecutionOptions(maximumCPUThreads: 1))
         let a8 = try Multislice.runBatch([wave, wave], through: lazy)
         r.check("runBatch(options:) with one thread equals the default exactly", a1 == a8)
+        r.check("MetalAccuracy.covers: 1024² and 100 slices inside, 1025 or 101 outside",
+                a.covers(nx: 1024, ny: 1024, slices: 100) && !a.covers(nx: 1025, ny: 64, slices: 10)
+                && !a.covers(nx: 64, ny: 64, slices: 101))
+        let beam300 = try ElectronBeam(energy: 300_000)
+        let other = Waves.planeWave(beam: beam300, grid: lazy.grid)
+        r.refuses("a batch of two energies", .mixedEnergies(first: 200_000, other: 300_000)) {
+            try Multislice.runBatch([wave, other], through: lazy)
+        }
         r.refusesCase("maximumSliceCount: 1 refuses two slices", "invalidSliceThickness") {
             try Potential(structure: singleAtomStructure(), nx: 32, ny: 32, sliceThickness: 2, maximumSliceCount: 1)
         }
