@@ -84,7 +84,7 @@ A bound for such sums needs an absolute floor next to the relative term, for exa
 
 **The wave stays on the device.** The wave sits in two alternating device buffers. Scans build the probes there from a centred spectrum and per-position ramps, propagate them in batches whose waves fit a memory budget (512 MB by default, ``ExecutionOptions/metalBatchBytes``), and return the diffraction intensity of each position.
 
-**One Metal run at a time.** The executables and the command queue are shared, so a lock serialises Metal runs within a process.
+**Chunks, not one command buffer.** A run commits its command buffer every few slices, so that a chunk takes about 50 to 150 ms: it starts at 8 slices and doubles or halves after each chunk by the time it took. The executables and the command queue are shared, so a lock serialises the chunks within a process; it is free between chunks, where a second run (another document's preview) can take its turn, the task's cancellation is checked and the progress handler is called.
 
 **The CPU path is the reference.** Float64 Accelerate code computes the same quantities, and every Metal result is checked against it. The registered bounds, relative to the array's maximum, are:
 

@@ -49,33 +49,74 @@ public enum Backend: Sendable, Hashable {
 public enum Multislice {
     /// Propagates `incident` through `potential` and returns the waves at the requested exit planes, in plane order.
     /// `options` reach `.metal` (renormalisation, cache); `.cpu` runs one wave on one thread whatever they say.
+    ///
+    /// The run checks for cancellation after every slice on `.cpu` and after every chunk of slices on `.metal` (a chunk
+    /// takes about 50 to 150 ms; the Metal engine is free for another run between chunks) and then throws
+    /// `CancellationError`. `progress` gets the stage, the slices done and the fraction, at most once per
+    /// `options.progressInterval`, never after a cancel; a handler changes no number.
     public static func run(_ incident: Waves, through potential: ProjectedPotential, exitPlanes: ExitPlanes = .last,
-                           backend: Backend = .cpu, options: ExecutionOptions = .standard) throws -> [Waves] {
+                           backend: Backend = .cpu, options: ExecutionOptions = .standard,
+                           progress: SimulationProgressHandler? = nil) throws -> [Waves] {
         guard incident.grid.matches(potential.grid) else { throw SimulatoError.gridMismatch }
         let planes = try exitPlanes.planes(sliceCount: potential.slices.count)
+        var reporter = ProgressReporter(progress, interval: options.progressInterval)
+        reporter.report(preparing(slices: potential.slices.count))
+        try Task.checkCancellation()
         switch backend {
         case .cpu:
-            let transmissions = try transmissionFunctions(potential, beam: incident.beam)
-            return try runCPU(incident, potential: potential, transmissions: transmissions, planes: planes)
+            return try runCPUReporting(incident, potential: potential, planes: planes, reporter: &reporter)
         case .metal:
             let engine = try MetalEngine.require()
             let prepared = try MetalMultislice.prepare(potential, beam: incident.beam, tilt: incident.tilt, engine: engine)
-            return try MetalMultislice.run(incident, prepared: prepared, planes: planes, options: options)
+            return try runMetalReporting(incident, prepared: prepared, planes: planes, options: options, reporter: &reporter)
         }
     }
 
     /// The same for a `Potential`: on `.cpu` built first (`build()`), on `.metal` built slice by slice on the GPU.
     public static func run(_ incident: Waves, through potential: Potential, exitPlanes: ExitPlanes = .last,
-                           backend: Backend = .cpu, options: ExecutionOptions = .standard) throws -> [Waves] {
+                           backend: Backend = .cpu, options: ExecutionOptions = .standard,
+                           progress: SimulationProgressHandler? = nil) throws -> [Waves] {
         guard incident.grid.matches(potential.grid) else { throw SimulatoError.gridMismatch }
+        let planes = try exitPlanes.planes(sliceCount: potential.sliceCount)
+        var reporter = ProgressReporter(progress, interval: options.progressInterval)
+        reporter.report(preparing(slices: potential.sliceCount))
+        try Task.checkCancellation()
         switch backend {
         case .cpu:
-            return try run(incident, through: potential.build(), exitPlanes: exitPlanes, backend: .cpu, options: options)
+            let built = try potential.build()
+            try Task.checkCancellation()
+            return try runCPUReporting(incident, potential: built, planes: planes, reporter: &reporter)
         case .metal:
-            let planes = try exitPlanes.planes(sliceCount: potential.sliceCount)
             let engine = try MetalEngine.require()
             let prepared = try MetalMultislice.prepare(potential, beam: incident.beam, tilt: incident.tilt, engine: engine)
-            return try MetalMultislice.run(incident, prepared: prepared, planes: planes, options: options)
+            return try runMetalReporting(incident, prepared: prepared, planes: planes, options: options, reporter: &reporter)
+        }
+    }
+
+    static func preparing(slices n: Int) -> SimulationProgress {
+        SimulationProgress(stage: .preparing, completed: 0, total: n, unit: .slices, fraction: nil)
+    }
+
+    static func propagating(_ done: Int, of n: Int) -> SimulationProgress {
+        SimulationProgress(stage: .propagating, completed: done, total: n, unit: .slices,
+                           fraction: n > 0 ? Double(done) / Double(n) : 1)
+    }
+
+    static func runCPUReporting(_ incident: Waves, potential: ProjectedPotential, planes: [Int],
+                                reporter: inout ProgressReporter) throws -> [Waves] {
+        let transmissions = try transmissionFunctions(potential, beam: incident.beam)
+        let n = potential.slices.count
+        return try runCPU(incident, potential: potential, transmissions: transmissions, planes: planes) { j in
+            try Task.checkCancellation()
+            reporter.report(propagating(j + 1, of: n))
+        }
+    }
+
+    static func runMetalReporting(_ incident: Waves, prepared: MetalPreparedPotential, planes: [Int],
+                                  options: ExecutionOptions, reporter: inout ProgressReporter) throws -> [Waves] {
+        let n = prepared.sliceCount
+        return try MetalMultislice.run(incident, prepared: prepared, planes: planes, options: options) { done in
+            reporter.report(propagating(done, of: n))
         }
     }
 
@@ -129,8 +170,10 @@ public enum Multislice {
         return p
     }
 
+    /// One wave through the slices on the calling thread; `afterSlice(j)` runs after slice j (zero-based) and may throw
+    /// to stop the run.
     package static func runCPU(_ incident: Waves, potential: ProjectedPotential, transmissions: [ComplexField],
-                       planes: [Int]) throws -> [Waves] {
+                               planes: [Int], afterSlice: (Int) throws -> Void = { _ in }) throws -> [Waves] {
         let grid = potential.grid
         let fft = try FFT2D(nx: grid.nx, ny: grid.ny)
         var propagators: [Double: ComplexField] = [:]
@@ -152,6 +195,7 @@ public enum Multislice {
                 out.append(Waves(field: psi, grid: grid, beam: incident.beam, normalization: incident.normalization,
                                  tilt: incident.tilt))
             }
+            try afterSlice(j)
         }
         return out
     }

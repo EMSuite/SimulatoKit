@@ -43,6 +43,13 @@ Read <doc:GridsWavesConventions> before indexing into any array the library retu
 - ``OrthogonalUnit``
 - ``Slab``
 
+### Progress
+
+- ``SimulationProgress``
+- ``SimulationProgress/Stage``
+- ``SimulationProgress/Unit``
+- ``SimulationProgressHandler``
+
 ### Errors
 
 - ``SimulatoError``

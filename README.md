@@ -114,7 +114,8 @@ let haadf = try STEM.scan(probe: probe, potentials: [potential], scan: scan,
 `Backend.cpu` is the reference: float64 on Accelerate (vDSP); scans and batches use up to 8 threads. `Backend.metal`
 runs in float32 on the GPU (MPSGraph) behind the same API: for a `Potential` the projected potential is built on the GPU
 slice by slice, the transmission functions always are, the wave stays on the device, and scans build their probes and
-diffraction intensities there too; one compiled step is encoded per slice into one command buffer. Without a Metal
+diffraction intensities there too; one compiled step is encoded per slice, and the command buffer is committed per chunk of
+about 50 to 150 ms, so two Metal runs interleave between chunks. Without a Metal
 device it throws `SimulatoError.metalUnavailable` (`Multislice.metalIsAvailable` tells beforehand). The registered
 tolerances of Metal against the CPU: exit wave 1e−4, intensity, diffraction pattern and detector images 2e−4 relative to
 the maximum, total intensity 1.5e−6 per slice, up to 100 slices; measured, the wave
@@ -134,11 +135,31 @@ numbers, the potential included):
 The CPU scans run 8 threads and were timed on a subset of positions and scaled (linear in positions). Measured while other builds
 ran, which slows the CPU side most: read the Metal-to-CPU ratios as upper bounds (re-measuring on an idle machine is #5).
 
+## Progress and stopping
+
+`Multislice.run`, `Multislice.runBatch` and `STEM.scan` take a `progress:` handler that gets a `SimulationProgress` (the
+stage, a count with its unit and the fraction of the run, nil while the run prepares), at most ten times a second, never after
+a cancel. Cancelling the task that runs them stops them with `CancellationError` after the slice (`.cpu`) or chunk (`.metal`)
+under way. A `STEMRun` keeps a stopped scan's finished positions and frozen-phonon configurations and continues it, with the
+numbers of an uninterrupted run.
+
+```swift
+// continuing the quick start: a small scan that can stop (cancel the task that runs it) and continue
+let corner = try GridScan(start: SIMD2(0, 0), end: SIMD2(a / 4, a / 4), nx: 2, ny: 2)
+var stemRun = try STEMRun(probe: probe, potentials: [potential], scan: corner,
+                          detectors: [AnnularDetector(inner: 70, outer: 200)], backend: backend)
+do {
+    _ = try stemRun.run { progress in print(progress.stage, progress.fraction ?? 0) }
+} catch is CancellationError {
+    print(stemRun.completedPositions, "of", stemRun.positionCount, "positions kept; call run() again to continue")
+}
+```
+
 ## Choices and their defaults
 
 Every choice the kit makes has a parameter, and the default is the value the numbers were validated with:
 `ExecutionOptions` (`options:` on `Multislice.run`, `Multislice.runBatch` and `STEM.scan`: CPU threads, Metal batch memory
-and shapes, the CPU scan's chunk, the Metal renormalisation and executable cache), `MetalAccuracy.registered` (the
+and shapes, the CPU scan's chunk, the Metal renormalisation and executable cache, the progress interval), `MetalAccuracy.registered` (the
 Metal-against-CPU bounds the tests hold), `Grid.matches(_:relativeTolerance:)`, the slice ceiling (`maximumSliceCount:`)
 and the constants of `scherzerDefocus`, `pointResolution` and `nyquistSampling`. abTEM's own conventions (the antialias
 aperture, the slicing rules, the π choice in `LobatoParameterization`) stay as abTEM defines them.

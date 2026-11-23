@@ -147,4 +147,20 @@ let value = try OffsetDisc(centre: .zero, radius: 10).detect(flat)
 
 `STEM.scan` also takes an `options:` parameter of type `ExecutionOptions` (SimulatoMultislice). It sets the CPU thread cap, the Metal batch memory and the size of the chunk of positions held at once (`scanChunkBytes`); `ExecutionOptions.standard` is the default.
 
-On `.cpu` the positions run in chunks and in parallel on at most 8 threads. On `.metal` the probes, the transmissions and the diffraction intensities are computed on the GPU in batches (see `Metal on Apple GPUs: pitfalls and design` in SimulatoMultislice). Results from the two backends agree within the registered bounds; use `.cpu` as the reference in tests.
+On `.cpu` the positions run in chunks and in parallel on at most 8 threads, in rounds of one position per thread. On `.metal` the probes, the transmissions and the diffraction intensities are computed on the GPU in batches (see `Metal on Apple GPUs: pitfalls and design` in SimulatoMultislice). Results from the two backends agree within the registered bounds; use `.cpu` as the reference in tests.
+
+### Progress, stopping and continuing
+
+`STEM.scan` takes a `progress:` handler that gets a `SimulationProgress` (SimulatoCore): the stage, the configuration under way, the positions done in it and the fraction of the whole run, at most once per `ExecutionOptions.progressInterval` (0.1 s by default). The fraction is nil while a configuration is being prepared. The handler is called on the thread that runs the scan.
+
+A scan stops when its task is cancelled: it throws `CancellationError` after the round of positions under way (`.cpu`) or the chunk of slices under way (`.metal`). To keep what was finished and continue later, run a ``STEMRun``. It is a value that holds the sums so far; `run(progress:)` continues where the last call stopped, and `measurements()` gives the result so far, the mean over the configurations finished at each position. Configurations are the outer loop and their seeds are fixed by their index, so a continued run equals an uninterrupted one, bit for bit on `.cpu` and within the registered bounds on `.metal`.
+
+```swift
+var run = try STEMRun(probe: probe, potentials: potentials, scan: scan,
+                      detectors: [haadf], backend: .metal)
+do {
+    let images = try run.run { progress in print(progress.fraction ?? 0) }
+} catch is CancellationError {
+    let soFar = run.measurements()   // run.completedConfigurations of run.configurationCount
+}
+```

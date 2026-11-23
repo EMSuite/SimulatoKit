@@ -14,7 +14,7 @@ public enum MetalBatchShapes: Sendable, Hashable {
     case exact
 }
 
-/// How `Multislice.run`, `Multislice.runBatch` and `STEM.scan` execute. Every count is at least 1 (a smaller value, set in
+/// How `Multislice.run`, `Multislice.runBatch` and `STEM.scan` execute, and how often they report progress. Every count is at least 1 (a smaller value, set in
 /// the initialiser or later, is raised to 1). None of these choices changes a `.cpu` number;
 /// on `.metal`, batch sizes and shapes change rounding only (within `MetalAccuracy.registered`), the renormalisation
 /// changes the agreement (see `metalRenormalization`).
@@ -32,16 +32,20 @@ public struct ExecutionOptions: Sendable, Hashable {
     public var metalExecutableCacheLimit: Int { didSet { metalExecutableCacheLimit = max(1, metalExecutableCacheLimit) } }
     /// How a remainder batch is shaped on Metal (default `.powersOfTwo`).
     public var metalBatchShapes: MetalBatchShapes
+    /// The shortest time between two progress calls (default 0.1 s: at most ten calls a second; zero reports every chunk).
+    /// A negative value is raised to zero.
+    public var progressInterval: Duration { didSet { progressInterval = max(.zero, progressInterval) } }
 
     public init(maximumCPUThreads: Int = 8, metalBatchBytes: Int = 512 << 20, scanChunkBytes: Int = 256 << 20,
                 metalRenormalization: Bool = true, metalExecutableCacheLimit: Int = 12,
-                metalBatchShapes: MetalBatchShapes = .powersOfTwo) {
+                metalBatchShapes: MetalBatchShapes = .powersOfTwo, progressInterval: Duration = .milliseconds(100)) {
         self.maximumCPUThreads = max(1, maximumCPUThreads)
         self.metalBatchBytes = max(1, metalBatchBytes)
         self.scanChunkBytes = max(1, scanChunkBytes)
         self.metalRenormalization = metalRenormalization
         self.metalExecutableCacheLimit = max(1, metalExecutableCacheLimit)
         self.metalBatchShapes = metalBatchShapes
+        self.progressInterval = max(.zero, progressInterval)
     }
 
     /// The defaults the kit was validated with.

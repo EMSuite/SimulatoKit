@@ -224,14 +224,21 @@ limit (`tools/metal-fft-gain`; README "Known limits"). The CTF (`Waves.applying`
 failure of the Metal path, never a tolerance to widen. `MetalAccuracy.registered` carries these bounds as a value.
 
 Execution choices are parameters (`ExecutionOptions`, passed as `options:`; 0.2.0):
-threads, Metal batch memory and shapes, the CPU scan chunk, the renormalisation, the executable cache. abTEM's nearest
-counterparts are its `max_batch` and dask settings, which are not counted as missing options above.
+threads, Metal batch memory and shapes, the CPU scan chunk, the renormalisation, the executable cache, the progress interval
+(0.6.0). abTEM's nearest counterparts are its `max_batch`, `pbar` and dask settings, which are not counted as missing options
+above.
 
 ## Not abTEM's, SimulatoKit's own
 
 - The Metal backend (`Backend.metal`) and the batched scan (`Multislice.runBatch`), registered against the CPU path; MPSGraph's float32 FFT gain is a known limit
   (`tools/metal-fft-gain`).
 - The CPU batch on up to `ExecutionOptions.maximumCPUThreads` (8 by default) threads, equal to sequential runs (exact today).
+- Progress and cancellation (0.6.0): `Multislice.run`, `Multislice.runBatch` and `STEM.scan` take a `SimulationProgress`
+  handler (at most ten calls a second by default, none after a cancel, no fraction while a run prepares) and stop with
+  `CancellationError` after the slice (`.cpu`) or chunk of about 50 to 150 ms (`.metal`) under way; a Metal run takes the
+  engine lock per chunk, so two runs interleave. `STEMRun` keeps a stopped scan's finished positions and configurations and
+  continues it: equal to an uninterrupted run bit for bit on `.cpu` (tested), within `MetalAccuracy.registered` on `.metal`.
+  A handler changes no `.cpu` number (tested bit for bit) and no `.metal` kernel.
 - The constants of the CTF closed forms as parameters (`factor:` of `scherzerDefocus`, 1.5 by default as abTEM; `divisor:` of
   `pointResolution`, 6; `oversampling:` of `nyquistSampling`, 4).
 - `LobatoParameterization.PiConstant`: the exact π by default, abTEM's float32 π on request.
