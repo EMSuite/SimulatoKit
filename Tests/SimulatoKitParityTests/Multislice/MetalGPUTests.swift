@@ -17,7 +17,7 @@ enum GPUCases {
         let g = c["gpts"] as! [Int]
         return try Potential(structure: Pins.structure(id), nx: g[0], ny: g[1],
                              sliceThickness: c["slice_thickness_requested"] as! Double,
-                             parameterization: LobatoParameterization(piConstant: pi))
+                             parameterization: .lobato(LobatoParameterization(piConstant: pi)))
     }
 
     static func aluminium(cells: (Int, Int, Int)) throws -> AtomicStructure { try aluminiumStructure(cells: cells) }
@@ -87,6 +87,22 @@ struct MetalGPUTests {
             #expect(relDiff(integral, f0) <= 1e-5, "\(id) slice \(j): k = 0 identity \(relDiff(integral, f0))")
         }
         print("GPU V vs CPU V, \(id): \(worst)")
+    }
+
+    /// The GPU's V with Kirkland's parameters against the CPU's (the bound of the Lobato case above).
+    @Test(arguments: ["A1", "B1"])
+    func gpuKirklandPotentialMatchesTheCPUPotential(id: String) throws {
+        let c = Pins.case(id)
+        let g = c["gpts"] as! [Int]
+        let lazy = try Potential(structure: Pins.structure(id), nx: g[0], ny: g[1],
+                                 sliceThickness: c["slice_thickness_requested"] as! Double,
+                                 parameterization: .kirkland(KirklandParameterization()))
+        let cpu = try lazy.build()
+        let gpu = try Multislice.gpuPotentialSlices(lazy)
+        #expect(gpu.count == cpu.slices.count)
+        for (j, (a, b)) in zip(gpu, cpu.slices).enumerated() {
+            #expect(relMax(a, b.values) <= 1e-5, "\(id) Kirkland slice \(j): \(relMax(a, b.values))")
+        }
     }
 
     @Test(arguments: CaseBeam.all)

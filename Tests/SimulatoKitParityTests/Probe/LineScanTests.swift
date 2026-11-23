@@ -64,7 +64,7 @@ struct LineScanTests {
         let n = LinescanPins.json["gpts"] as! Int
         let potential = try ProjectedPotential(structure: LinescanPins.structure, nx: n, ny: n,
                                                sliceThickness: LinescanPins.num(LinescanPins.json["sliceThickness"]),
-                                               parameterization: LobatoParameterization(piConstant: pi))
+                                               parameterization: .lobato(LobatoParameterization(piConstant: pi)))
         let beam = try ElectronBeam(energy: LinescanPins.num(LinescanPins.json["energy"]))
         let probe = try Probe(beam: beam, grid: potential.grid,
                               aperture: Aperture(semiangleCutoff: LinescanPins.num(LinescanPins.json["semiangle"])))

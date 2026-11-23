@@ -15,7 +15,7 @@ About 350 checks (`run.sh` prints the count), about 0.1 s to run, under 20 s to 
   `isSupportedLength`, `matches`, the refusals), `Antialias` (the aperture counted pixel by pixel, `cutoffPatternSize` 21 → 22 → 23),
   `ComplexField`, `RealField`, `Waves` (plane wave stays 1, both `Normalization`s and `MaxAngle`s), `AtomicStructure` (ASE order of
   `repeated`).
-- **SimulatoMultislice**: `LobatoParameterization` (f(0) = 16π Σ A/B³, both `PiConstant`s), `Slicing`, `ProjectedPotential` (Σ V = f(0)/ΔxΔy,
+- **SimulatoMultislice**: `LobatoParameterization` (f(0) = 16π Σ A/B³, both `PiConstant`s), `KirklandParameterization` (supports, parameters, scaled parameters, Si f(0) against abTEM, `float32PiSquared`, refusals), `Parameterization` (`.standard`, forwarding, kept on `Potential`), `Slicing`, `ProjectedPotential` (Σ V = f(0)/ΔxΔy,
   periodic wrap, every init), `ExitPlanes` (`every(m)` plane indices), `Multislice` (`run`, `runBatch`, `transmissionFunctions`,
   `propagator`, `maximumCPUThreads`, a vacuum plane wave stays 1, batch = single runs, exact today), `Backend.metal` only if
   `Multislice.metalIsAvailable` (otherwise a SKIP line with the reason, and the `metalUnavailable` refusal is checked),

@@ -138,7 +138,7 @@ public struct FrozenPhonons: Sendable, Hashable {
 
     /// The projected potential of every configuration.
     public func potentials(nx: Int, ny: Int, sliceThickness: Double,
-                           parameterization: LobatoParameterization = LobatoParameterization()) throws -> [ProjectedPotential] {
+                           parameterization: Parameterization = .standard) throws -> [ProjectedPotential] {
         try (0..<count).map {
             try ProjectedPotential(structure: configuration($0), nx: nx, ny: ny, sliceThickness: sliceThickness,
                                    parameterization: parameterization)
@@ -147,7 +147,7 @@ public struct FrozenPhonons: Sendable, Hashable {
 
     /// The potential of every configuration, unbuilt (for `.metal`, which builds each slice on the GPU).
     public func lazyPotentials(nx: Int, ny: Int, sliceThickness: Double,
-                               parameterization: LobatoParameterization = LobatoParameterization()) throws -> [Potential] {
+                               parameterization: Parameterization = .standard) throws -> [Potential] {
         try (0..<count).map {
             try Potential(structure: configuration($0), nx: nx, ny: ny, sliceThickness: sliceThickness,
                           parameterization: parameterization)

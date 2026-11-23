@@ -54,7 +54,7 @@ public enum SimulatoError: Error, Sendable, Equatable, CustomStringConvertible {
         case .invalidSampling(let x, let y): return "grid sampling must be finite and positive and give fewer than 1e9 points, got (\(x), \(y)) Å"
         case .invalidTilt(let why): return "invalid tilt: \(why)"
         case .invalidBox(let x, let y, let z): return "the box must be orthogonal with finite positive sides, got (\(x), \(y), \(z)) Å"
-        case .unsupportedElement(let z): return "element Z = \(z) has no Lobato parameters (Z = 1 ... 103 are tabulated)"
+        case .unsupportedElement(let z): return "element Z = \(z) has no scattering parameters (Z = 1 ... 103 are tabulated)"
         case .invalidPosition(let i): return "atom \(i) has a non-finite position"
         case .invalidSliceThickness(let s): return "slice thickness must be finite and positive, got \(s) Å"
         case .sliceThicknessesDoNotSumToBox(let s, let d): return "slice thicknesses sum to \(s) Å, the box is \(d) Å deep"

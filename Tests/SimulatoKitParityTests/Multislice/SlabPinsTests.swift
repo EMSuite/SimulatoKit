@@ -257,7 +257,7 @@ struct SlabPinsTests {
         let gpts = pin["gpts"] as! [Int]
         let potential = try Potential(structure: slab.structure, nx: gpts[0], ny: gpts[1],
                                       sliceThicknesses: slab.sliceThicknesses,
-                                      parameterization: LobatoParameterization(piConstant: pi))
+                                      parameterization: .lobato(LobatoParameterization(piConstant: pi)))
         let beam = try ElectronBeam(energy: pin["energy"] as! Double)
         let waves = try Multislice.run(Waves.planeWave(beam: beam, grid: potential.grid), through: potential)
         let reference = SlabPins.complex("si110.exit")

@@ -31,7 +31,7 @@ let package = Package(
         // Constants, the electron beam, structures (a minimal local type, docs/adr/0001), grids, complex
         // fields, waves with their intensity and diffraction pattern, the antialias aperture, the float64 CPU FFT.
         .target(name: "SimulatoCore", swiftSettings: settings),
-        // The Lobato parameterisation, slicing, the projected potential (infinite projection), transmission,
+        // The Lobato and Kirkland parameterisations, slicing, the projected potential (infinite projection), transmission,
         // Fresnel propagation and the multislice loop on two backends (CPU float64, Metal float32).
         .target(name: "SimulatoMultislice", dependencies: ["SimulatoCore"], swiftSettings: settings),
         // The soft aperture, the polar aberrations C10 ... C56 and the probe at a position, grid and line scans, the CTF

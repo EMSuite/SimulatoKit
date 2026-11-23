@@ -69,7 +69,7 @@ struct STEMPinsTests {
     static func singleAtomHAADF(_ z: Int, pi: LobatoParameterization.PiConstant = .abTEMFloat32) throws -> Double {
         let s = try AtomicStructure(box: SIMD3(8, 8, 2), atoms: [.init(atomicNumber: z, position: SIMD3(4, 4, 1))])
         let p = try ProjectedPotential(structure: s, nx: 128, ny: 128, sliceThickness: 2,
-                                       parameterization: LobatoParameterization(piConstant: pi))
+                                       parameterization: .lobato(LobatoParameterization(piConstant: pi)))
         let probe = try Probe(beam: ElectronBeam(energy: 200e3), grid: p.grid, aperture: Aperture(semiangleCutoff: 25))
         let exit = try Multislice.run(probe.build(at: SIMD2(4, 4)), through: p)[0]
         return try AnnularDetector(inner: 70, outer: 130).detect(DiffractionIntensity(exit))[0]

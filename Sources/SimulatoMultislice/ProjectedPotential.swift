@@ -1,6 +1,6 @@
 //
 //  ProjectedPotential.swift
-//  Role: the projected potential of each slice, abTEM's default `Potential(parametrization="lobato",
+//  Role: the projected potential of each slice, abTEM's default `Potential(parametrization="lobato" or "kirkland",
 //        projection="infinite")` (`integrals.py` `ScatteringFactorProjectionIntegrals`):
 //        bilinear deltas per element, FFT, times f(k²) / S(k), inverse FFT, real part, summed over elements.
 //
@@ -30,7 +30,7 @@ public struct ProjectedPotential: Sendable, Hashable {
     /// Builds the potential with slices of `sliceThickness` (abTEM's rule: ⌈Lz / s⌉ equal slices), at most
     /// `maximumSliceCount`.
     public init(structure: AtomicStructure, nx: Int, ny: Int, sliceThickness: Double,
-                parameterization: LobatoParameterization = LobatoParameterization(),
+                parameterization: Parameterization = .standard,
                 maximumSliceCount: Int = Slicing.maximumSliceCount) throws {
         let t = try Slicing.thicknesses(depth: structure.box.z, requested: sliceThickness, maximumCount: maximumSliceCount)
         try self.init(structure: structure, nx: nx, ny: ny, sliceThicknesses: t, parameterization: parameterization,
@@ -39,7 +39,7 @@ public struct ProjectedPotential: Sendable, Hashable {
 
     /// Builds the potential with the given slice thicknesses (they must sum to the box's depth): `Potential(...).build()`.
     public init(structure: AtomicStructure, nx: Int, ny: Int, sliceThicknesses: [Double],
-                parameterization: LobatoParameterization = LobatoParameterization(),
+                parameterization: Parameterization = .standard,
                 maximumSliceCount: Int = Slicing.maximumSliceCount) throws {
         self = try Potential(structure: structure, nx: nx, ny: ny, sliceThicknesses: sliceThicknesses,
                              parameterization: parameterization, maximumSliceCount: maximumSliceCount).build()
@@ -108,13 +108,13 @@ public struct ProjectedPotential: Sendable, Hashable {
 /// The per-grid work of the projection: f(k²) / S(k) per element (cached) and the FFT plan.
 final class SliceBuilder {
     let grid: Grid
-    let parameterization: LobatoParameterization
+    let parameterization: Parameterization
     private let fft: FFT2D
     private let k2: [Double]
     private let compensation: [Double]
     private var kernels: [Int: [Double]] = [:]
 
-    init(grid: Grid, parameterization: LobatoParameterization) throws {
+    init(grid: Grid, parameterization: Parameterization) throws {
         self.grid = grid
         self.parameterization = parameterization
         fft = try FFT2D(nx: grid.nx, ny: grid.ny)

@@ -70,7 +70,7 @@ enum Pins2 {
         let c = Self.case(id)
         let g = c["gpts"] as! [Int]
         return try frozenPhonons(id).potentials(nx: g[0], ny: g[1], sliceThickness: c["slice_thickness_requested"] as! Double,
-                                                parameterization: LobatoParameterization(piConstant: pi))
+                                                parameterization: .lobato(LobatoParameterization(piConstant: pi)))
     }
 
     static func probe(_ id: String, grid: Grid) throws -> Probe {
