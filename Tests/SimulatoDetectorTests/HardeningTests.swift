@@ -68,3 +68,67 @@ struct DetectorHardeningTests {
         #expect(try f.interpolateLine(end: SIMD2(4, 0), width: 3).count > 0)
     }
 }
+
+/// A detector whose values disagree with its own shape.
+struct MiscountingDetector: Detector {
+    func shape(for grid: Grid, beam: ElectronBeam) throws -> [Int] { [] }
+    func detect(_ intensity: DiffractionIntensity) throws -> [Double] { [1, 2] }
+}
+
+/// #59: inputs that trapped or hung now throw.
+@Suite("Detector hardening: traps and hangs")
+struct DetectorTrapTests {
+    /// A NaN or infinite value made the Poisson draw loop forever; a mean beyond an Int trapped.
+    @Test func poissonNoiseRefusesValuesWithNoDraw() throws {
+        for bad in [Double.nan, .infinity, 1e300] {
+            let m = ScanMeasurement(scanShape: [2], valueShape: [], values: [1, bad])
+            #expect(throws: SimulatoError.self) { try m.poissonNoise(dose: 10, seed: 1) }
+            #expect(throws: SimulatoError.self) { try m.poissonNoise(dose: 10, samples: 2, seed: 1) }
+        }
+        // −∞ is not finite either: refused, not clipped to 0.
+        let negative = ScanMeasurement(scanShape: [2], valueShape: [], values: [1, -.infinity])
+        #expect(throws: SimulatoError.self) { try negative.poissonNoise(dose: 10, seed: 1) }
+        // Finite values still draw, and a dose of 0 gives zeros.
+        let fine = ScanMeasurement(scanShape: [2], valueShape: [], values: [0.5, -3])
+        #expect(try fine.poissonNoise(dose: 0, seed: 1).values == [0, 0])
+        #expect(try fine.poissonNoise(dose: 1e6, seed: 1).values[1] == 0)
+    }
+
+    /// A source size far above the scan's sampling made a kernel radius beyond an Int (a trap) or memory.
+    @Test func hugeSourceSizeIsRefused() throws {
+        let m = ScanMeasurement(scanShape: [4, 4], valueShape: [], values: [Double](repeating: 1, count: 16))
+        #expect(throws: SimulatoError.self) { try m.gaussianSourceSize(sigma: 1e12, samplingX: 1, samplingY: 1) }
+        #expect(throws: SimulatoError.self) { try m.gaussianSourceSize(sigma: 1, samplingX: 1e-300, samplingY: 1) }
+        #expect(try m.gaussianSourceSize(sigma: 2, samplingX: 1, samplingY: 1).values.count == 16)
+    }
+
+    /// An angular sampling far finer than the outer angle made the segmented detector's crop beyond an Int.
+    @Test func segmentedDetectorOnAFineAngularSamplingDoesNotTrap() throws {
+        let grid = try Grid(nx: 8, ny: 8, extentX: 1e300, extentY: 1e300)
+        let beam = try ElectronBeam(energy: 200e3)
+        let p = DiffractionIntensity(grid: grid, beam: beam, values: [Double](repeating: 1, count: 64))
+        let d = try SegmentedDetector(radialBins: 2, azimuthalBins: 4, inner: 0, outer: 10)
+        #expect(try d.detect(p).count == 8)
+    }
+
+    /// A custom detector returning more values than its shape trapped the scan.
+    @Test func miscountingDetectorIsRefused() throws {
+        let grid = try Grid(nx: 16, ny: 16, extentX: 4, extentY: 4)
+        let probe = try Probe(beam: ElectronBeam(energy: 200e3), grid: grid, aperture: Aperture(semiangleCutoff: 20))
+        let potential = ProjectedPotential(grid: grid, slices: [PotentialSlice(thickness: 1, values: [Double](repeating: 0, count: 256))])
+        let scan = try GridScan(start: SIMD2(0, 0), end: SIMD2(4, 4), nx: 2, ny: 2)
+        #expect(throws: SimulatoError.self) {
+            try STEM.scan(probe: probe, potentials: [potential], scan: scan, detectors: [MiscountingDetector()])
+        }
+    }
+
+    /// A configuration index outside the ensemble trapped.
+    @Test func configurationOutsideTheEnsembleIsRefused() throws {
+        let structure = try AtomicStructure(box: SIMD3(4, 4, 4), atoms: [.init(atomicNumber: 13, position: SIMD3(2, 2, 2))])
+        let phonons = try FrozenPhonons(structure: structure, sigmas: [13: 0.1], configurations: 2, seed: 1)
+        #expect(throws: SimulatoError.self) { try phonons.configuration(2) }
+        #expect(throws: SimulatoError.self) { try phonons.configuration(-1) }
+        #expect(try phonons.configuration(1).atoms.count == 1)
+    }
+}
+

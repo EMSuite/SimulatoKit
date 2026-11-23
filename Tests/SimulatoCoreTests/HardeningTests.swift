@@ -36,4 +36,13 @@ struct CoreHardeningTests {
         #expect(throws: SimulatoError.self) { try w.resampled(rows: 1 << 20, columns: 1 << 20) }
         #expect(try w.resampled(rows: 8, columns: 8).grid.nx == 8)
     }
+
+    /// #59: nx · ny (and its 16-byte values) overflowed `Grid.count` and every array size after it.
+    @Test func gridWhoseValuesOverflowIsRefused() throws {
+        #expect(throws: SimulatoError.gridTooLarge(rows: 1 << 32, columns: 1 << 32, required: .max, limit: .max)) {
+            try Grid(nx: 1 << 32, ny: 1 << 32, extentX: 1, extentY: 1)
+        }
+        #expect(throws: SimulatoError.self) { try Grid(nx: 1 << 31, ny: 1 << 30, extentX: 1, extentY: 1) }
+        #expect(try Grid(nx: 1 << 20, ny: 1 << 20, extentX: 1, extentY: 1).count == 1 << 40)
+    }
 }

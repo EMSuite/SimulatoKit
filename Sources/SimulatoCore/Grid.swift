@@ -12,11 +12,15 @@ public struct Grid: Sendable, Hashable {
     public let extentX: Double
     public let extentY: Double
 
-    /// - Throws: `SimulatoError.unsupportedGridLength` for a length outside `isSupportedLength`, `invalidExtent` for a
-    ///   non-finite or non-positive extent.
+    /// - Throws: `SimulatoError.unsupportedGridLength` for a length outside `isSupportedLength`, `gridTooLarge` for a
+    ///   grid whose 16-byte values overflow an `Int` of bytes, `invalidExtent` for a non-finite or non-positive extent.
     public init(nx: Int, ny: Int, extentX: Double, extentY: Double) throws {
         guard Self.isSupportedLength(nx) else { throw SimulatoError.unsupportedGridLength(nx) }
         guard Self.isSupportedLength(ny) else { throw SimulatoError.unsupportedGridLength(ny) }
+        // A grid's arrays hold nx · ny complex values of 16 bytes: the product must fit an Int.
+        let (points, o1) = nx.multipliedReportingOverflow(by: ny)
+        let o2 = points.multipliedReportingOverflow(by: 16).overflow
+        guard !o1, !o2 else { throw SimulatoError.gridTooLarge(rows: nx, columns: ny, required: Int.max, limit: Int.max) }
         guard extentX.isFinite, extentY.isFinite, extentX > 0, extentY > 0 else {
             throw SimulatoError.invalidExtent(extentX, extentY)
         }
