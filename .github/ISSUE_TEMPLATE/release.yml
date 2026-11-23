@@ -1,0 +1,65 @@
+name: Release
+description: The tracking issue of one app version. Pinned, in the version's milestone.
+title: "Release X.Y.Z"
+labels: [infra]
+body:
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: The feature issues (as sub-issues) and the kit issues each one waits for. After the freeze only bugs join.
+    validations: {required: true}
+  - type: textarea
+    id: kits
+    attributes:
+      label: Kit and EMSuiteUI versions this release ships on
+      value: |
+        - ImagoKit:
+        - FormatoKit:
+        - DiffractoKit:
+        - SpectroKit:
+        - CuboKit:
+        - SimulatoKit:
+        - EMSuiteUI:
+  - type: checkboxes
+    id: train
+    attributes:
+      label: The release train
+      options:
+        - label: "1 Scope: this issue lists every feature and kit issue"
+        - label: "2 Kits first: kit PRs merged, kit Release PRs merged bottom-up (ImagoKit and FormatoKit, DiffractoKit and SpectroKit, EMSuiteUI)"
+        - label: "3 App adopts: one chore(deps) PR takes the new kit versions"
+        - label: "4 Freeze: only release work in the milestone; the nightly green twice in a row"
+        - label: "5 Walk: door recipes and screen steps on the release build, pictures reviewed, the quality gate of the release plan passed; Paul drove a real dataset in every new room"
+        - label: "6 Notes: one docs PR with docs/release-notes/X.Y.Z.md, README version, docs/status.md and the store text"
+        - label: "7 Tag: Paul merges the Release PR; the bot tags and writes the GitHub release"
+        - label: "8 Website: tools/release.sh on the tag, DMGs on the release, one website PR (version, size, feed)"
+        - label: "9 Store: uploaded from the same tag by the store rule (every minor; a patch only for a crash, lost data or a wrong number)"
+        - label: "10 Close: milestone closed; leftovers moved to the next version or Backlog, in the kit repos too"
+  - type: input
+    id: story
+    attributes:
+      label: Launch story sentence (minor releases)
+      description: What someone who does not have the app can do now, in one sentence. Paul agrees to it. It is the store's promotional text, the headline on the app's page and the first line of every post. A patch release has none.
+  - type: checkboxes
+    id: launch
+    attributes:
+      label: Launch kit (every minor release; a patch gets its notes and nothing else)
+      description: Made in the release walk. Launch day is the day Paul presses Release in App Store Connect. Docs and design rules in docs/design/reach.md.
+      options:
+        - label: "L1 Story: the sentence above, agreed by Paul"
+        - label: "L2 Pages: the task pages and tutorials of the new features merged and stamped with the version"
+        - label: "L3 Store texts: promotional text, What's New, keywords (tools/check-store-keywords.sh green if they change)"
+        - label: "L4 Recording session inside the walk, demo or public data, English number format, one appearance for the set: store pictures if they changed, three clips of 20 to 25 seconds, the tutorial recordings, one 60 to 90 second video; every picture reviewed before it goes to Paul"
+        - label: "L5 Numbers: every number in a post has a pinned run or a parity table behind it"
+        - label: "L6 Drafts: one doc for Paul with a post per channel, the note to the maintainers concerned and the video description"
+        - label: "L7 Launch day (Paul): Release in App Store Connect, merge the website PR, upload the videos, send the posts as himself"
+        - label: "L8 The week after: answers drafted for every reply, one row of store views and downloads, GitHub downloads, new Discussions, mails and outside issues; anything asked for twice becomes an issue"
+  - type: checkboxes
+    id: store
+    attributes:
+      label: Store checklist
+      options:
+        - label: Review-risk check done if the release adds an entitlement, a network connection or third-party data
+        - label: What's new, privacy text and review notes updated
+        - label: Upload started by Paul; agreements and Submit clicked; released by hand after approval
