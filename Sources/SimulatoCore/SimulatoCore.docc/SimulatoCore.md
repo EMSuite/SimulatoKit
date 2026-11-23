@@ -1,6 +1,6 @@
 # ``SimulatoCore``
 
-The shared foundation of SimulatoKit: electron beams, lateral grids, structures, complex and real fields, waves and the antialias aperture.
+The shared foundation of SimulatoKit: electron beams, lateral grids, structures and slabs cut from crystal cells, complex and real fields, waves and the antialias aperture.
 
 ## Overview
 
@@ -37,6 +37,11 @@ Read <doc:GridsWavesConventions> before indexing into any array the library retu
 
 - ``AtomicStructure``
 - ``AtomicStructure/Atom``
+- ``CrystalCell``
+- ``CrystalCell/Site``
+- ``SlabBuilder``
+- ``OrthogonalUnit``
+- ``Slab``
 
 ### Errors
 

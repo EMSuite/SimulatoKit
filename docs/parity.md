@@ -4,7 +4,7 @@ The coverage table of abTEM 1.0.10 (`References/python/abtem`, git `164e644`): i
 the source in `site-packages/abtem` against SimulatoKit. Rewritten for 0.3.0 (the growing phase's kit audit); every row
 has one state and one priority.
 
-**Totals (129 rows): 38 present, 40 partial, 51 missing.** By priority: **study** 27 rows (12 present, 7 partial, 8 missing);
+**Totals (129 rows): 38 present, 41 partial, 50 missing.** By priority: **study** 27 rows (12 present, 8 partial, 7 missing);
 **useful** 80 (26, 33, 21); **not planned** 22 (all missing, each with its reason).
 
 States:
@@ -57,7 +57,7 @@ detector, the Gaussian source size and Poisson noise on a scan.
 | `Potential(exit_planes=)` | `ExitPlanes` on `Multislice.run` | **present**: `.every(m)` includes the entrance plane as abTEM does; `.afterSlices` always adds the last slice, abTEM's tuple does not | useful |
 | `Potential(projection="finite")` (`QuadratureProjectionIntegrals`), `SlicedAtoms(xy_padding, z_padding)` | | **missing**: planned: SimulatoMultislice (finite projections for thick slices) | study |
 | `Potential(periodic=False)` (cut cell with margins) | | **missing**: planned: SimulatoMultislice | study |
-| `Potential(plane, origin, box)` (rotated and cut cells, `orthogonalize_cell`) | | **missing**: planned: with non-orthogonal cells in `AtomicStructure` (`plane="xy"`, `origin` 0 and the cell's own box only) | study |
+| `Potential(plane, origin, box)` (rotated and cut cells, `orthogonalize_cell`) | | **missing**: the kit turns and cuts the crystal before the potential (`SlabBuilder`, the row of `orthogonalize_cell` below); `Potential` takes the orthogonal box it gives (`plane="xy"`, `origin` 0 and the box's own extent) | study |
 | `Potential(integrator=)`, `ScatteringFactorProjectionIntegrals`, `GaussianProjectionIntegrals`, `ProjectionIntegralTable` | | **missing**: not planned: the infinite scattering-factor projection is the only integrator | not planned |
 | `Potential.build(first_slice, last_slice, max_batch, lazy)`, `.generate_slices`, iteration | `Potential.build()` | **partial**: the whole potential only; `first_slice`, `last_slice`, `max_batch`, `lazy` (dask) and slice generation not offered | useful |
 | `PotentialArray(array, slice_thickness, extent, sampling, exit_planes)` (the eager potential) | `ProjectedPotential` (`grid`, `slices`, `sliceOfAtom`, `init(grid:slices:)`) | **partial**: built by `Potential.build()`, or from outside with `PotentialSlice(thickness:values:)` and `init(grid:slices:)` (the planted potential of the project and tile pins); no ensemble axes or stored exit planes | study |
@@ -69,7 +69,7 @@ detector, the Gaussian source size and Poisson noise on a scan.
 | `PotentialArray.depth_profile`, `.show`, `.show_depth_profile` | | **missing**: not planned: plotting (the kits have no UI) | not planned |
 | `crystal_slice_thicknesses(atoms, tolerance)` | `Slicing.crystalSliceThicknesses(_:tolerance:)` | **present**: bins of ⌊z / tolerance⌋ with 0 and the depth added, the differences of the bin centres; pinned at rtol 1e−7 on planted cells and aluminium (`tools/pins/crystal-slices/pins.py`, held inline); refuses where abTEM's assertion fails (the thicknesses must sum to the depth), and also an empty result, which abTEM returns for a box under 1e−8 Å; a structure with no atoms slices the empty box (abTEM fails on it) | study |
 | `ChargeDensityPotential`, `GPAWPotential` | | **missing**: not planned: needs DFT inputs; outside the common use of the kit | not planned |
-| `orthogonalize_cell`, `standardize_cell`, the helpers of `atoms.py` (`rotate_atoms`, `cut_cell`, `pad_atoms`, `shrink_cell`, ...) | | **missing**: planned: with DiffractoKit's cells | study |
+| `orthogonalize_cell(max_repetitions)` with `best_orthogonal_cell` and `decompose_affine_transform`; `standardize_cell`, the helpers of `atoms.py` (`rotate_atoms`, `cut_cell`, `pad_atoms`, `shrink_cell`, ...) | `CrystalCell(a:b:c:sites:)`, `CrystalCell(a:b:c:alpha:beta:gamma:sites:)` (ASE 3.29.0 `cellpar_to_cell`), `SlabBuilder.orthogonalUnit(of:zoneAxis:maximumRepetitions:)`, `.orthogonalUnit(of:zoneAxis:maximumStrain:)`, `.slab(of:zoneAxis:lateralSize:thickness:sliceThickness:maximumStrain:maximumAtomCount:)` | **partial** (0.6.0): the orthogonal unit (box, supercell matrix, atoms, scale and shear of the affine transform) pinned against `orthogonalize_cell` after the kit's own turn to the zone axis (`tools/pins/slab/pins.py`) on Al, Si and Cu [001], [110], [111], [112]; Fe [001], [111]; Mg [0001], [2 −1 −1 0], [101]; SrTiO₃ [001], [110]; β″ (Andersen et al., Acta Mater. 46 (1998) 3283) [010], [100]: box, scale and shear at rtol 1e−7, matrix and atom count exact, atoms as periodic sets at rtol 1e−7 and atol 1e−9 Å; the exit wave of the built Si [110] slab at the multislice pin (1e−10 of the maximum with `.abTEMFloat32`, 1e−6 with `.exact`). Method: abTEM's (Madsen and Susi, Open Res. Europe 1 (2021) 24) with ASE's cut (Larsen et al., J. Phys.: Condens. Matter 29 (2017) 273002) taken by exact lattice arithmetic (Known limits). The `plane`, `origin` and `box` options, `standardize_cell` and the other helpers not offered; partly occupied sites refused | study |
 
 ## Parametrizations
 
@@ -235,6 +235,13 @@ counterparts are its `max_batch` and dask settings, which are not counted as mis
 - The constants of the CTF closed forms as parameters (`factor:` of `scherzerDefocus`, 1.5 by default as abTEM; `divisor:` of
   `pointResolution`, 6; `oversampling:` of `nyquistSampling`, 4).
 - `LobatoParameterization.PiConstant`: the exact π by default, abTEM's float32 π on request.
+- The slab builder's choices around `orthogonalize_cell` (0.6.0): the turn to the zone axis (z along [u v w], pointing at
+  the source; x along the shortest lattice row at right angles, the one closest to py4DSTEM's in-plane reference on a tie,
+  py4DSTEM's reference when no row is at right angles; the orientation in DiffractoKit's and py4DSTEM's convention, checked
+  against py4DSTEM's matrices); the repetition ladder 5, 10, 20, 40 under a strain limit (0.1 % by default, a typed refusal
+  with the least strain found); coordinates within 1e−6 Å of a face set on it; slices that repeat with the period
+  (⌈period / s⌉ per period) and a shift along z of j h / 720 that keeps every atomic plane farthest from a slice boundary
+  (0.48 Å on Si [110] with slices of 0.96 Å).
 ## Known limits and decisions
 
 Open work is in the [issues](https://github.com/EMSuite/SimulatoKit/issues), including the ones closed as *not planned*
@@ -247,10 +254,16 @@ and parked for later (quiet-run benchmarks #5, real cells #6, FFT path #43). Spe
   at 192² to 512² against abTEM float32; re-measure in a quiet run before changing anything.
 - **Metal:** the bounds hold to 100 slices and grids to 1024²; past 300 slices with the renormalisation is not measured.
 - **Not ported:** `CrystalPotential` (a unit potential repeated, frozen phonons per cell; its API is undecided); non-orthogonal
-  and rotated cells, `periodic=False`, `orthogonalize_cell` (the kit keeps its own structure type,
-  `docs/adr/0001-standalone-structure-types.md`); finite projection; the Kirkland, Peng and Ewald parametrisations;
+  boxes in `AtomicStructure` and `periodic=False` (a crystal is turned and cut by `SlabBuilder` first; the kit keeps its own
+  structure types, `docs/adr/0001-standalone-structure-types.md`); finite projection; the Kirkland, Peng and Ewald parametrisations;
   Debye–Waller tables; `PolarMeasurements.to_diffraction_patterns` and `azimuthal_limits`.
 - **Lobato π:** the pins use `LobatoParameterization(piConstant: .abTEMFloat32)`; with the default `.exact` results differ by
   about 2.6e−8 of the maximum.
+- **abTEM's cut drops atoms:** `orthogonalize_cell` cuts with ASE's `cut`, which wraps fractional coordinates with `% 1.0`;
+  a coordinate a rounding error below zero lands on the far face of the new cell and is dropped (Al and Cu [111] keep 23
+  of 24 atoms in abTEM 1.0.10). The kit takes the new cell's atoms by exact lattice arithmetic (det V × the cell's atoms,
+  checked); the pins call `orthogonalize_cell` with `origin` moved off the atoms where the plain call falls short, and record
+  it (`abtem_origin`).
+- **Partly occupied sites:** refused by the slab builder (`SimulatoError.partialOccupancy`); abTEM has no equivalent.
 - **`WavesDetector` pins:** abTEM 1.0.10's own `probe.scan(..., WavesDetector(gpts=...))` raises a broadcast error; the pins
   use `probe.multislice` then `WavesDetector(gpts).detect`, abTEM's per-wave code.

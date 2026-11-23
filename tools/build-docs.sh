@@ -13,7 +13,7 @@ modules=$(find Sources -maxdepth 2 -name '*.docc' -exec basename {} .docc \; | s
 archives=()
 for m in $modules; do
   xcodebuild docbuild -scheme "$m" -destination 'generic/platform=macOS' -derivedDataPath "$derived" >"$derived/$m.log" 2>&1 \
-    || { tail -30 "$derived/$m.log"; echo "docbuild failed for $m"; exit 1; }
+    || { grep -E "(error|warning): " "$derived/$m.log" | sort -u | head -40 || true; tail -30 "$derived/$m.log"; echo "docbuild failed for $m"; exit 1; }
   archives+=("$(find "$derived/Build/Products" -name "$m.doccarchive" -maxdepth 3 | head -1)")
 done
 

@@ -56,11 +56,13 @@ func checkCore(_ r: inout Report) {
             .invalidPosition(index: 3), .invalidSliceThickness(0), .sliceThicknessesDoNotSumToBox(sum: 1, depth: 2),
             .invalidExitPlanes("x"), .gridMismatch, .invalidAperture(0), .invalidAberration("x"), .metalUnavailable("x"),
             .metalFailure("x"), .invalidFrozenPhonons("x"), .invalidScan("x"), .invalidDetector("x"),
-            .gridTooLarge(rows: 1, columns: 1, required: 2, limit: 1),
+            .gridTooLarge(rows: 1, columns: 1, required: 2, limit: 1), .invalidCell("x"), .invalidZoneAxis("x"),
+            .invalidRepetitions(0), .invalidStrain(-1), .strainTooLarge(strain: 0.002, maximum: 0.001, repetitions: 10),
+            .partialOccupancy(site: 0, occupancy: 0.5), .tooManyAtoms(count: 3, limit: 2),
         ]
-        r.equal("SimulatoError: 20 cases built", all.count, 20)
+        r.equal("SimulatoError: 27 cases built", all.count, 27)
         r.check("SimulatoError: every description is non-empty and distinct",
-                Set(all.map(\.description)).count == 20 && all.allSatisfy { !$0.description.isEmpty })
+                Set(all.map(\.description)).count == 27 && all.allSatisfy { !$0.description.isEmpty })
         r.equal("SimulatoError.invalidEnergy description", SimulatoError.invalidEnergy(-1).description,
                 "electron energy must be finite and positive, got -1.0 eV")
         r.check("SimulatoError is Equatable", SimulatoError.invalidPosition(index: 3) == .invalidPosition(index: 3)
@@ -204,6 +206,50 @@ func checkCore(_ r: inout Report) {
         r.refusesCase("AtomicStructure box with NaN", "invalidBox") { try AtomicStructure(box: SIMD3(1, .nan, 1), atoms: []) }
         r.refuses("AtomicStructure atom 1 with a non-finite position", .invalidPosition(index: 1)) {
             try AtomicStructure(box: SIMD3(4, 5, 6), atoms: [atom, .init(atomicNumber: 13, position: SIMD3(.infinity, 0, 0))])
+        }
+    }
+
+    r.section("Core: slab builder") { r in
+        // Face-centred aluminium, a = 4.05 Å: four sites.
+        let fcc: [CrystalCell.Site] = [SIMD3<Double>(0, 0, 0), SIMD3(0, 0.5, 0.5), SIMD3(0.5, 0, 0.5), SIMD3(0.5, 0.5, 0)]
+            .map { CrystalCell.Site(atomicNumber: 13, fractional: $0) }
+        let al = try CrystalCell(a: 4.05, b: 4.05, c: 4.05, alpha: 90, beta: 90, gamma: 90, sites: fcc)
+        r.near("CrystalCell volume = a³", al.volume, 4.05 * 4.05 * 4.05, 1e-12)
+        // [001]: the cell itself, 4 atoms, no strain, the orientation the identity.
+        let u001 = try SlabBuilder.orthogonalUnit(of: al, zoneAxis: SIMD3(0, 0, 1))
+        r.check("Al [001] unit: box 4.05³ Å, 4 atoms", u001.structure.box == SIMD3(4.05, 4.05, 4.05)
+                && u001.structure.atoms.count == 4)
+        r.equal("Al [001] unit: strain 0", u001.strain, 0)
+        r.check("Al [001] unit: orientation is the identity", u001.orientation.columns.0 == SIMD3(1, 0, 0)
+                && u001.orientation.columns.1 == SIMD3(0, 1, 0) && u001.orientation.columns.2 == SIMD3(0, 0, 1))
+        // [110]: x along the cube edge [0 0 -1] (a), y along [-1 1 0] (a √2), z along [1 1 0] (a √2); 2 cells, 8 atoms.
+        let u110 = try SlabBuilder.orthogonalUnit(of: al, zoneAxis: SIMD3(1, 1, 0))
+        r.near("Al [110] unit: x side = a", u110.structure.box.x, 4.05, 1e-12)
+        r.near("Al [110] unit: y side = a √2", u110.structure.box.y, 4.05 * 2.0.squareRoot(), 1e-12)
+        r.near("Al [110] unit: z side = a √2", u110.structure.box.z, 4.05 * 2.0.squareRoot(), 1e-12)
+        r.check("Al [110] unit: 2 cells, 8 atoms", u110.cellCount == 2 && u110.structure.atoms.count == 8)
+        r.near("Al [110] orientation: third column is [1 1 0]/√2", u110.orientation.columns.2.x, 0.5.squareRoot(), 1e-15)
+        // A slab 20 Å thick: round(20 / 4.05) = 5 periods; slices of 4.05 / ⌈4.05 / 1⌉ = 0.81 Å, 5 per period.
+        let slab = try SlabBuilder.slab(of: al, zoneAxis: SIMD3(0, 0, 1), thickness: 20)
+        r.check("Al [001] slab 20 Å: 5 periods, 20 atoms", slab.repeats == SIMD3(1, 1, 5) && slab.structure.atoms.count == 20)
+        r.equal("Al [001] slab 20 Å: 25 slices", slab.sliceThicknesses.count, 25)
+        r.near("Al [001] slab: slice height 0.81 Å", slab.sliceThicknesses[0], 0.81, 1e-12)
+        // Planes at 0 and a/2 = 2.025 Å = 2.5 slices: the best shift is a quarter slice, 0.2025 Å from every boundary.
+        r.near("Al [001] slab: every plane a quarter slice from a boundary", slab.planeMargin, 0.2025, 1e-9)
+        r.near("Al [001] slab: shifted by a quarter slice", slab.zShift, 0.2025, 1e-12)
+        r.refuses("zone axis [0 0 0]", .invalidZoneAxis("[0 0 0] is no direction")) {
+            try SlabBuilder.orthogonalUnit(of: al, zoneAxis: SIMD3(0, 0, 0))
+        }
+        let half = try CrystalCell(a: 4.05, b: 4.05, c: 4.05, alpha: 90, beta: 90, gamma: 90,
+                                   sites: [CrystalCell.Site(atomicNumber: 13, fractional: .zero, occupancy: 0.5)])
+        r.refuses("a half-occupied site", .partialOccupancy(site: 0, occupancy: 0.5)) {
+            try SlabBuilder.orthogonalUnit(of: half, zoneAxis: SIMD3(0, 0, 1))
+        }
+        r.refusesCase("a flat cell", "invalidCell") {
+            try CrystalCell(a: SIMD3(1, 0, 0), b: SIMD3(0, 1, 0), c: SIMD3(1, 1, 0), sites: fcc)
+        }
+        r.refusesCase("a slab over the atom limit", "tooManyAtoms") {
+            try SlabBuilder.slab(of: al, zoneAxis: SIMD3(0, 0, 1), thickness: 4.05, maximumAtomCount: 3)
         }
     }
 }
