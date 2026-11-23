@@ -23,11 +23,16 @@ stops the script before anything is written. The inventory of every fixture and 
 `Tests/SimulatoKitParityTests/Fixtures/README.md`.
 
 ```sh
-for g in potential-multislice stem-detectors ctf sampling-tilt scan-patterns waves icom linescan; do
-  .venv/bin/python -I -B tools/pins/$g/pins.py
-done
-git status --short Tests/   # no change to an *-arrays.bin: the fixtures reproduce
+tools/pins/regenerate.sh                      # every generator, in order (PYTHON=<interpreter> to use another venv)
+.venv/bin/python -I -B tools/pins/compare.py  # judge what moved: equal, float noise, or DIFFERS
+git checkout -- Tests Sources                 # put the committed references back after a check
 ```
+
+The Linux reference job (`.github/workflows/references.yml`, weekly and on every PR that touches `tools/pins/`, the
+requirements or the fixtures) runs exactly these two commands on GitHub's Ubuntu runner and fails on any DIFFERS. The
+committed fixtures were written on a Mac; Linux reproduces them to float noise (about 1e-15 relative), which
+`compare.py` tells apart from a real change (`|a - b| <= 1e-12 + 1e-9 max(|a|, |b|)`; float32 bounds for the arrays
+`tools/pins/float32-arrays.txt` names, each with its reason). `tools/pins/test_compare.py` tests the comparison itself.
 
 | Generator | Writes |
 |---|---|
