@@ -1,8 +1,10 @@
 //
 //  Comparison.swift
-//  Role: the relative-difference helpers both the unit tests and the parity tests use (nothing is copied).
+//  Role: the relative-difference helpers both the unit tests and the parity tests use (nothing is copied), and the log
+//        a progress handler writes to.
 //
 
+import Synchronization
 import SimulatoCore
 
 /// max |a − b| / max |b| (0 when both are zero).
@@ -29,3 +31,11 @@ package func relMax(_ a: ComplexField, _ b: ComplexField) -> Double {
 }
 
 package func relDiff(_ a: Double, _ b: Double) -> Double { b == 0 ? abs(a) : abs(a - b) / abs(b) }
+
+/// The progress calls a handler received, shared with the handler (it is called on the run's thread).
+package final class ProgressLog: Sendable {
+    package let calls = Mutex<[SimulationProgress]>([])
+    package init() {}
+    package var all: [SimulationProgress] { calls.withLock { $0 } }
+    package var handler: SimulationProgressHandler { { p in self.calls.withLock { $0.append(p) } } }
+}

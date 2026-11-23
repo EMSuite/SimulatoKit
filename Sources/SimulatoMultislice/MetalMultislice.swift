@@ -25,61 +25,99 @@ extension Multislice {
     /// with its own FFT plan; every exit wave is computed exactly as one sequential run computes it (bit for bit).
     public static let maximumCPUThreads = ExecutionOptions.standard.maximumCPUThreads
 
-    static func runCPUParallel(_ incidents: [Waves], potential: ProjectedPotential, transmissions: [ComplexField],
-                               last: Int, threads: Int) throws -> [Waves] {
+    /// The exit waves of `incidents` on at most `threads` threads, in rounds of one wave per thread: before each round,
+    /// on the calling thread, the task's cancellation is checked (`CancellationError`); after it, `round(first index,
+    /// exit waves)` gets the round's waves in order. Each wave is computed exactly as one sequential run computes it.
+    package static func forEachCPURound(_ incidents: [Waves], potential: ProjectedPotential, transmissions: [ComplexField],
+                                        last: Int, threads: Int, round: (Int, [Waves]) throws -> Void) throws {
         let count = incidents.count
         let workers = max(1, min(threads, ProcessInfo.processInfo.activeProcessorCount, count))
-        let results = Mutex<[Int: Waves]>([:])
-        let failure = Mutex<(any Error)?>(nil)
-        DispatchQueue.concurrentPerform(iterations: workers) { worker in
-            for q in stride(from: worker, to: count, by: workers) {
+        var first = 0
+        while first < count {
+            try Task.checkCancellation()
+            let size = min(workers, count - first), base = first
+            let results = Mutex<[Int: Waves]>([:])
+            let failure = Mutex<(any Error)?>(nil)
+            DispatchQueue.concurrentPerform(iterations: size) { k in
                 do {
-                    let w = try runCPU(incidents[q], potential: potential, transmissions: transmissions, planes: [last])[0]
-                    results.withLock { $0[q] = w }
+                    let w = try runCPU(incidents[base + k], potential: potential, transmissions: transmissions,
+                                       planes: [last])[0]
+                    results.withLock { $0[k] = w }
                 } catch {
                     failure.withLock { if $0 == nil { $0 = error } }
-                    return
                 }
             }
+            if let error = failure.withLock({ $0 }) { throw error }
+            let waves = results.withLock { r in (0..<size).map { r[$0]! } }
+            first += size
+            try round(base, waves)
         }
-        if let error = failure.withLock({ $0 }) { throw error }
-        return results.withLock { r in (0..<count).map { r[$0]! } }
     }
 
     /// The exit waves (after the last slice) of a batch of incident waves through one potential: on `.cpu` on at most
     /// `options.maximumCPUThreads` threads from the shared transmission functions, on `.metal` in batches whose waves fit
     /// in `options.metalBatchBytes`, the transmissions built on the GPU.
+    ///
+    /// Cancellation is checked after every round of one wave per thread on `.cpu` and every chunk of slices on `.metal`
+    /// (`CancellationError`); `progress` counts the waves done, at most once per `options.progressInterval`.
     public static func runBatch(_ incidents: [Waves], through potential: ProjectedPotential,
-                                backend: Backend = .cpu, options: ExecutionOptions = .standard) throws -> [Waves] {
+                                backend: Backend = .cpu, options: ExecutionOptions = .standard,
+                                progress: SimulationProgressHandler? = nil) throws -> [Waves] {
         guard let first = incidents.first else { return [] }
         for w in incidents where !w.grid.matches(potential.grid) { throw SimulatoError.gridMismatch }
+        var reporter = ProgressReporter(progress, interval: options.progressInterval)
+        reporter.report(batchPreparing(incidents.count))
+        try Task.checkCancellation()
         switch backend {
         case .cpu:
-            let transmissions = try transmissionFunctions(potential, beam: first.beam)
-            return try runCPUParallel(incidents, potential: potential, transmissions: transmissions,
-                                      last: potential.slices.count - 1, threads: options.maximumCPUThreads)
+            return try cpuBatch(incidents, potential, options, &reporter)
         case .metal:
             let engine = try MetalEngine.require()
             let prepared = try MetalMultislice.prepare(potential, beam: first.beam, tilt: try sharedTilt(incidents),
                                                        engine: engine)
-            return try metalBatch(incidents, prepared, options)
+            return try metalBatch(incidents, prepared, options, &reporter)
         }
     }
 
     /// The same for a `Potential`: on `.cpu` built first (`build()`), on `.metal` built slice by slice on the GPU.
     public static func runBatch(_ incidents: [Waves], through potential: Potential,
-                                backend: Backend = .cpu, options: ExecutionOptions = .standard) throws -> [Waves] {
+                                backend: Backend = .cpu, options: ExecutionOptions = .standard,
+                                progress: SimulationProgressHandler? = nil) throws -> [Waves] {
         guard let first = incidents.first else { return [] }
         for w in incidents where !w.grid.matches(potential.grid) { throw SimulatoError.gridMismatch }
+        var reporter = ProgressReporter(progress, interval: options.progressInterval)
+        reporter.report(batchPreparing(incidents.count))
+        try Task.checkCancellation()
         switch backend {
         case .cpu:
-            return try runBatch(incidents, through: potential.build(), backend: .cpu, options: options)
+            let built = try potential.build()
+            try Task.checkCancellation()
+            return try cpuBatch(incidents, built, options, &reporter)
         case .metal:
             let engine = try MetalEngine.require()
             let prepared = try MetalMultislice.prepare(potential, beam: first.beam, tilt: try sharedTilt(incidents),
                                                        engine: engine)
-            return try metalBatch(incidents, prepared, options)
+            return try metalBatch(incidents, prepared, options, &reporter)
         }
+    }
+
+    static func batchPreparing(_ count: Int) -> SimulationProgress {
+        SimulationProgress(stage: .preparing, completed: 0, total: count, unit: .positions, fraction: nil)
+    }
+
+    static func cpuBatch(_ incidents: [Waves], _ potential: ProjectedPotential, _ options: ExecutionOptions,
+                         _ reporter: inout ProgressReporter) throws -> [Waves] {
+        let transmissions = try transmissionFunctions(potential, beam: incidents[0].beam)
+        let count = incidents.count
+        var out: [Waves] = []
+        out.reserveCapacity(count)
+        try forEachCPURound(incidents, potential: potential, transmissions: transmissions,
+                            last: potential.slices.count - 1, threads: options.maximumCPUThreads) { _, waves in
+            out += waves
+            reporter.report(SimulationProgress(stage: .propagating, completed: out.count, total: count, unit: .positions,
+                                               fraction: Double(out.count) / Double(count)))
+        }
+        return out
     }
 
     /// A Metal batch shares its propagators, so its waves must share their tilt.
@@ -91,9 +129,15 @@ extension Multislice {
         return first
     }
 
-    static func metalBatch(_ incidents: [Waves], _ prepared: MetalPreparedPotential,
-                           _ options: ExecutionOptions) throws -> [Waves] {
-        let fields = try MetalMultislice.runBatch(incidents.map(\.field), prepared: prepared, options: options)
+    static func metalBatch(_ incidents: [Waves], _ prepared: MetalPreparedPotential, _ options: ExecutionOptions,
+                           _ reporter: inout ProgressReporter) throws -> [Waves] {
+        let count = incidents.count, slices = max(1, prepared.sliceCount)
+        let fields = try MetalMultislice.runBatch(incidents.map(\.field), prepared: prepared,
+                                                  options: options) { start, done, used in
+            let fraction = (Double(start) + Double(used) * Double(min(done, slices)) / Double(slices)) / Double(count)
+            reporter.report(SimulationProgress(stage: .propagating, completed: done >= slices ? start + used : start,
+                                               total: count, unit: .positions, fraction: fraction))
+        }
         return zip(incidents, fields).map {
             Waves(field: $0.1, grid: prepared.grid, beam: $0.0.beam, normalization: $0.0.normalization, tilt: $0.0.tilt)
         }

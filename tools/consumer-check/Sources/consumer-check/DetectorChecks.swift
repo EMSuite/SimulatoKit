@@ -251,4 +251,43 @@ func checkDetector(_ r: inout Report) {
             r.check("a WavesDetector scan refuses above its memory limit", tooLarge, "threw \(error)")
         }
     }
+
+    r.section("Detector: progress and a scan that stops and continues") { r in
+        let beam = try ElectronBeam(energy: 200_000)
+        let g = try Grid(nx: 32, ny: 32, extentX: 8, extentY: 8)
+        let cell = try AtomicStructure(box: SIMD3(8, 8, 4), atoms: [.init(atomicNumber: 13, position: SIMD3(4, 4, 2))])
+        let potential = try ProjectedPotential(structure: cell, nx: 32, ny: 32, sliceThickness: 1)
+        let probe = try Probe(beam: beam, grid: g, aperture: Aperture(semiangleCutoff: 20))
+        let scan = try GridScan(start: SIMD2(2, 2), end: SIMD2(6, 6), nx: 3, ny: 3)
+        let detector = try AnnularDetector(inner: 0, outer: 20)
+        let log = ProgressCalls()
+        let options = ExecutionOptions(maximumCPUThreads: 2, progressInterval: .zero)
+        r.check("ExecutionOptions.progressInterval defaults to 0.1 s; a negative one is raised to zero",
+                ExecutionOptions.standard.progressInterval == .milliseconds(100)
+                && ExecutionOptions(progressInterval: .seconds(-1)).progressInterval == .zero)
+        let plain = try STEM.scan(probe: probe, potentials: [potential], scan: scan, detectors: [detector])
+        let reported = try STEM.scan(probe: probe, potentials: [potential], scan: scan, detectors: [detector],
+                                     options: options, progress: log.handler)
+        r.check("a progress handler changes no number", plain[0].values == reported[0].values)
+        let calls = log.all
+        r.check("preparing first, with no fraction", calls.first?.stage == .preparing && calls.first?.fraction == nil)
+        r.equal("then rounds of two positions", calls.dropFirst().map(\.completed), [2, 4, 6, 8, 9])
+        r.check("the fraction reaches 1, no configuration for one potential",
+                calls.last?.fraction == 1 && calls.allSatisfy { $0.configuration == nil })
+        var run = try STEMRun(probe: probe, potentials: [potential, potential], scan: scan, detectors: [detector])
+        r.check("a new STEMRun has done nothing", run.completedConfigurations == 0 && run.completedPositions == 0
+                && !run.isComplete && run.configurationCount == 2 && run.positionCount == 9)
+        r.check("before it runs its measurement is empty", run.measurements()[0].values.allSatisfy { $0 == 0 })
+        let twice = try run.run()
+        r.check("run to the end: complete, the mean over two equal configurations is the one-potential scan",
+                run.isComplete && twice[0].values == plain[0].values)
+    }
+}
+
+/// The progress calls a handler received (the handler is called on the run's thread).
+final class ProgressCalls: @unchecked Sendable {
+    private let lock = NSLock()
+    private var calls: [SimulationProgress] = []
+    var all: [SimulationProgress] { lock.withLock { calls } }
+    var handler: SimulationProgressHandler { { p in self.lock.withLock { self.calls.append(p) } } }
 }

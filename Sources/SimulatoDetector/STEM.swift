@@ -1,8 +1,8 @@
 //
 //  STEM.swift
-//  Role: the STEM driver: every configuration, every scan position, the probe there through that configuration's
-//        potential, each detector on the exit wave, the mean over configurations (abTEM's `ensemble_mean`). Positions
-//        run as one batch per configuration (.cpu one by one, .metal batched on the GPU).
+//  Role: the STEM driver's entry points and the measurement type: every configuration, every scan position, the probe
+//        there through that configuration's potential, each detector on the exit wave, the mean over configurations
+//        (abTEM's `ensemble_mean`). The loop itself, which can stop and continue, is `STEMRun`.
 //
 
 import SimulatoCore
@@ -46,38 +46,24 @@ public enum STEM {
     /// Scans `probe` over `scan` through every potential (one per frozen-phonon configuration; one for a static
     /// structure) and returns each detector's measurement averaged over the potentials. On `.metal` the probes, the
     /// transmissions and the diffraction intensities are computed on the GPU.
+    ///
+    /// The scan stops with `CancellationError` when its task is cancelled (`STEMRun` keeps what was done and continues);
+    /// `progress` gets the configuration and the positions done, at most once per `options.progressInterval`.
     public static func scan(probe: Probe, potentials: [ProjectedPotential], scan: some ScanPattern, detectors: [any Detector],
-                            backend: Backend = .cpu, options: ExecutionOptions = .standard) throws -> [ScanMeasurement] {
-        guard !potentials.isEmpty else { throw SimulatoError.invalidScan("no potential") }
-        try checkShape(scan)
-        for p in potentials where !p.grid.matches(probe.grid) { throw SimulatoError.gridMismatch }
-        switch backend {
-        case .cpu:
-            return try cpuScan(probe: probe, potentials: potentials, scan: scan, detectors: detectors, options: options)
-        case .metal:
-            return try metalScan(probe: probe, count: potentials.count, scan: scan, detectors: detectors) { k, s, n, r, d in
-                try Multislice.metalScanIntensities(spectrum: s, positions: n, ramps: r, through: potentials[k],
-                                                    beam: probe.beam, tilt: probe.tilt, options: options, deliver: d)
-            }
-        }
+                            backend: Backend = .cpu, options: ExecutionOptions = .standard,
+                            progress: SimulationProgressHandler? = nil) throws -> [ScanMeasurement] {
+        var run = try STEMRun(probe: probe, potentials: potentials, scan: scan, detectors: detectors, backend: backend,
+                              options: options)
+        return try run.run(progress: progress)
     }
 
     /// The same through unbuilt potentials: on `.cpu` each is built (`build()`), on `.metal` each slice is built on the GPU.
     public static func scan(probe: Probe, potentials: [Potential], scan: some ScanPattern, detectors: [any Detector],
-                            backend: Backend = .cpu, options: ExecutionOptions = .standard) throws -> [ScanMeasurement] {
-        guard !potentials.isEmpty else { throw SimulatoError.invalidScan("no potential") }
-        try checkShape(scan)
-        for p in potentials where !p.grid.matches(probe.grid) { throw SimulatoError.gridMismatch }
-        switch backend {
-        case .cpu:
-            return try cpuScan(probe: probe, potentials: potentials.map { try $0.build() }, scan: scan, detectors: detectors,
-                               options: options)
-        case .metal:
-            return try metalScan(probe: probe, count: potentials.count, scan: scan, detectors: detectors) { k, s, n, r, d in
-                try Multislice.metalScanIntensities(spectrum: s, positions: n, ramps: r, through: potentials[k],
-                                                    beam: probe.beam, tilt: probe.tilt, options: options, deliver: d)
-            }
-        }
+                            backend: Backend = .cpu, options: ExecutionOptions = .standard,
+                            progress: SimulationProgressHandler? = nil) throws -> [ScanMeasurement] {
+        var run = try STEMRun(probe: probe, potentials: potentials, scan: scan, detectors: detectors, backend: backend,
+                              options: options)
+        return try run.run(progress: progress)
     }
 
     /// A custom `ScanPattern` must have one or two axes whose product is its number of positions.
@@ -92,60 +78,12 @@ public enum STEM {
         }
     }
 
-    static func cpuScan(probe: Probe, potentials: [ProjectedPotential], scan: some ScanPattern,
-                        detectors: [any Detector], options: ExecutionOptions) throws -> [ScanMeasurement] {
-        let positions = scan.positions
-        let shapes = try detectors.map { try $0.shape(for: probe.grid, beam: probe.beam) }
-        let counts = shapes.map { $0.reduce(1, *) }
-        var sums = counts.map { [Double](repeating: 0, count: $0 * positions.count) }
-        // Positions in chunks of `options.scanChunkBytes`, so the waves of one chunk only are held (13 MB per
-        // position at 480²).
-        let chunk = max(1, options.scanChunkBytes / (probe.grid.count * 16 * 2))
-        for first in stride(from: 0, to: positions.count, by: chunk) {
-            let range = first..<min(first + chunk, positions.count)
-            let incidents = try range.map { try probe.build(at: positions[$0]) }
-            for potential in potentials {
-                let exits = try Multislice.runBatch(incidents, through: potential, backend: .cpu, options: options)
-                for (offset, exit) in exits.enumerated() {
-                    try accumulate(DiffractionIntensity(exit), at: first + offset, detectors, counts, &sums)
-                }
-            }
-        }
-        return average(sums, shapes, scan: scan, over: potentials.count)
-    }
-
-    typealias Ramps = (Int) throws -> (x: ComplexField, y: ComplexField)
-
-    /// Potentials outer, positions inner: each position still sums its configurations in potential order.
-    static func metalScan(probe: Probe, count: Int, scan: some ScanPattern, detectors: [any Detector],
-                          run: (Int, ComplexField, Int, Ramps, (Int, [Double]) throws -> Void) throws -> Void)
-        throws -> [ScanMeasurement] {
-        let positions = scan.positions
-        let shapes = try detectors.map { try $0.shape(for: probe.grid, beam: probe.beam) }
-        let counts = shapes.map { $0.reduce(1, *) }
-        var sums = counts.map { [Double](repeating: 0, count: $0 * positions.count) }
-        let spectrum = probe.centredSpectrum()
-        for k in 0..<count {
-            try run(k, spectrum, positions.count, { try probe.shiftRamps(at: positions[$0]) }) { q, values in
-                let intensity = DiffractionIntensity(grid: probe.grid, beam: probe.beam, values: values)
-                try accumulate(intensity, at: q, detectors, counts, &sums)
-            }
-        }
-        return average(sums, shapes, scan: scan, over: count)
-    }
-
     static func accumulate(_ intensity: DiffractionIntensity, at q: Int, _ detectors: [any Detector], _ counts: [Int],
                            _ sums: inout [[Double]]) throws {
         for (d, detector) in detectors.enumerated() {
             let v = try detector.detect(intensity)
             precondition(v.count == counts[d], "a detector returned the wrong number of values")
             for k in 0..<v.count { sums[d][q * counts[d] + k] += v[k] }
-        }
-    }
-
-    static func average(_ sums: [[Double]], _ shapes: [[Int]], scan: some ScanPattern, over n: Int) -> [ScanMeasurement] {
-        zip(sums, shapes).map { values, shape in
-            ScanMeasurement(scanShape: scan.shape, valueShape: shape, values: values.map { $0 / Double(n) })
         }
     }
 }
