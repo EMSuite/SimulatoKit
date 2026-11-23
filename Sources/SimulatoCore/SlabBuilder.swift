@@ -40,20 +40,31 @@ public struct OrthogonalUnit: Sendable, Hashable {
 
     /// The largest of |scale − 1| and |shear| (0.001 is 0.1 %).
     public var strain: Double {
-        max(abs(abs(scale.x) - 1), abs(abs(scale.y) - 1), abs(abs(scale.z) - 1), abs(shear.x), abs(shear.y), abs(shear.z))
+        var worst = 0.0
+        for a in 0..<3 {
+            let stretch: Double = abs(abs(scale[a]) - 1)
+            let skew: Double = abs(shear[a])
+            worst = max(worst, stretch, skew)
+        }
+        return worst
     }
 
     /// The number of cells in the unit, det V.
     public var cellCount: Int {
-        let v = supercell
-        return v[0].x * (v[1].y * v[2].z - v[1].z * v[2].y) - v[0].y * (v[1].x * v[2].z - v[1].z * v[2].x)
-            + v[0].z * (v[1].x * v[2].y - v[1].y * v[2].x)
+        let r0: SIMD3<Int> = supercell[0], r1: SIMD3<Int> = supercell[1], r2: SIMD3<Int> = supercell[2]
+        let m0: Int = r1.y * r2.z - r1.z * r2.y
+        let m1: Int = r1.x * r2.z - r1.z * r2.x
+        let m2: Int = r1.x * r2.y - r1.y * r2.x
+        return r0.x * m0 - r0.y * m1 + r0.z * m2
     }
 
     public static func == (l: OrthogonalUnit, r: OrthogonalUnit) -> Bool {
-        l.structure == r.structure && l.supercell == r.supercell && l.maximumRepetitions == r.maximumRepetitions
-            && l.scale == r.scale && l.shear == r.shear && l.orientation.columns.0 == r.orientation.columns.0
-            && l.orientation.columns.1 == r.orientation.columns.1 && l.orientation.columns.2 == r.orientation.columns.2
+        guard l.structure == r.structure, l.supercell == r.supercell, l.maximumRepetitions == r.maximumRepetitions else {
+            return false
+        }
+        guard l.scale == r.scale, l.shear == r.shear else { return false }
+        let a = l.orientation, b = r.orientation
+        return a.columns.0 == b.columns.0 && a.columns.1 == b.columns.1 && a.columns.2 == b.columns.2
     }
 
     public func hash(into hasher: inout Hasher) {
@@ -213,15 +224,18 @@ public enum SlabBuilder {
                     let l = Lattice.length(r)
                     guard abs(Lattice.dot(r, ez)) <= 1e-9 * l else { continue }
                     let c = Lattice.dot(r, xref) / l
+                    let n = SIMD3<Int>(i, j, k)
                     guard let b = best else {
-                        best = (l, c, SIMD3(i, j, k), r)
+                        best = (length: l, cosine: c, n: n, r: r)
                         continue
                     }
                     let shorter = l < b.length * (1 - 1e-9)
                     let tie = l <= b.length * (1 + 1e-9)
-                    let larger = (i, j, k) > (b.n.x, b.n.y, b.n.z)
-                    if shorter || (tie && (c > b.cosine + 1e-9 || (c >= b.cosine - 1e-9 && larger))) {
-                        best = (l, c, SIMD3(i, j, k), r)
+                    let larger: Bool = i != b.n.x ? i > b.n.x : (j != b.n.y ? j > b.n.y : k > b.n.z)
+                    let closer: Bool = c > b.cosine + 1e-9
+                    let level: Bool = c >= b.cosine - 1e-9
+                    if shorter || (tie && (closer || (level && larger))) {
+                        best = (length: l, cosine: c, n: n, r: r)
                     }
                 }
             }
@@ -279,9 +293,9 @@ public enum SlabBuilder {
             let sign: Double = component > 0 ? 1 : (component < 0 ? -1 : 0)
             chosen.append(Lattice.vecmat(sign * SIMD3(Double(n.x), Double(n.y), Double(n.z)), cell))
         }
-        return SIMD3((0..<3).map { col in
-            (chosen[0][col] * chosen[0][col] + chosen[1][col] * chosen[1][col] + chosen[2][col] * chosen[2][col]).squareRoot()
-        })
+        var box = SIMD3<Double>(0, 0, 0)
+        for v in chosen { box += v * v }
+        return SIMD3<Double>(box.x.squareRoot(), box.y.squareRoot(), box.z.squareRoot())
     }
 
     /// The orthogonal unit of the turned cell at `repetitions`.
@@ -315,14 +329,24 @@ public enum SlabBuilder {
         guard let newInverse = Lattice.inverse(newCell) else {
             throw SimulatoError.invalidCell("no orthogonal cell within \(repetitions) repetitions")
         }
-        let affine = unchanged ? [SIMD3<Double>(1, 0, 0), SIMD3(0, 1, 0), SIMD3(0, 0, 1)] : Lattice.matmul(newInverse, d)
+        let identity: [SIMD3<Double>] = [SIMD3(1, 0, 0), SIMD3(0, 1, 0), SIMD3(0, 0, 1)]
+        let affine: [SIMD3<Double>] = unchanged ? identity : Lattice.matmul(newInverse, d)
 
         // The atoms of the new cell: every site in every cell translation that covers it, kept when its fractional
         // coordinates in the new cell lie in [0, 1) (within 1e-9 of an integer counts as that integer).
-        let corners = [SIMD3<Double>(0, 0, 0), SIMD3(0, 0, 1), SIMD3(0, 1, 0), SIMD3(0, 1, 1), SIMD3(1, 0, 0),
-                       SIMD3(1, 0, 1), SIMD3(1, 1, 0), SIMD3(1, 1, 1)].map { Lattice.vecmat($0, v) }
-        let lo = SIMD3((0..<3).map { a in Int(corners.map { $0[a] }.min()!.rounded(.down)) })
-        let hi = SIMD3((0..<3).map { a in Int(corners.map { $0[a] }.max()!.rounded(.up)) })
+        var corners: [SIMD3<Double>] = []
+        for c0 in [0.0, 1.0] {
+            for c1 in [0.0, 1.0] {
+                for c2 in [0.0, 1.0] { corners.append(Lattice.vecmat(SIMD3<Double>(c0, c1, c2), v)) }
+            }
+        }
+        var low = corners[0], high = corners[0]
+        for corner in corners {
+            low = pointwiseMin(low, corner)
+            high = pointwiseMax(high, corner)
+        }
+        let lo = SIMD3<Int>(Int(low.x.rounded(.down)), Int(low.y.rounded(.down)), Int(low.z.rounded(.down)))
+        let hi = SIMD3<Int>(Int(high.x.rounded(.up)), Int(high.y.rounded(.up)), Int(high.z.rounded(.up)))
         guard cells * Double(cell.sites.count) <= Double(unitAtomLimit) else {
             throw SimulatoError.tooManyAtoms(count: Int(cells) * cell.sites.count, limit: unitAtomLimit)
         }
