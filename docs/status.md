@@ -1,4 +1,4 @@
-# Status
+# Status: SimulatoKit 0.5.0 <!-- x-release-please-version -->
 
 SimulatoKit 0.5.0 (2026-11-06), against abTEM 1.0.10. Live: crystal cells and the Lobato projected potential (`project`, tiled; slices that follow the crystal planes), any grid length of at least 2 (vDSP where it has
 the length, a mixed-radix FFT for 2, 3, 5 and 7 and a generic odd-radix pass for the other lengths, Bluestein where a large prime factor makes it the cheaper), multislice on `.cpu` (float64) and `.metal` (float32, held to the CPU), beam tilt, the probe with
