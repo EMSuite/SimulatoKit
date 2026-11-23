@@ -87,6 +87,13 @@ public struct MetalAccuracy: Sendable, Hashable {
         self.gridLimit = gridLimit
     }
 
+    /// Whether a Metal run on an nx × ny grid through `slices` slices lies inside the bounds' tested range (`gridLimit`
+    /// points per side, `sliceLimit` slices). The kit runs beyond it too, outside the tested tolerance: the caller decides
+    /// whether to say so (a chip in the app) or to run `.cpu`.
+    public func covers(nx: Int, ny: Int, slices: Int) -> Bool {
+        max(nx, ny) <= gridLimit && slices <= sliceLimit
+    }
+
     /// The largest difference allowed between a Metal and a CPU detector image: `detector` × max(`imageMaximum`,
     /// `detectorFloor` × `incidentIntensity`).
     public func detectorBound(imageMaximum: Double, incidentIntensity: Double = 1) -> Double {

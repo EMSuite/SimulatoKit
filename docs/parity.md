@@ -86,7 +86,7 @@ detector, the Gaussian source size and Poisson noise on a scan.
 | abTEM | SimulatoKit | State | Priority |
 |---|---|---|---|
 | `PlaneWave(energy, extent, gpts, sampling, normalize=False, device)`, `.build()` | `Waves.planeWave(beam:grid:tilt:)` | **partial**: `normalize=True` not offered; the grid is given as gpts and extent (or built from a sampling by `Grid`); the backend is chosen at `Multislice.run` | useful |
-| `PlaneWave(tilt=)`, `Probe(tilt=)`, `Waves.base_tilt` | `Waves.planeWave(beam:grid:tilt:)`, `Probe(…tilt:)`, `Waves.tilt` [mrad] | **present**: as abTEM the tilt is metadata that enters the Fresnel propagator, e^{−2πi (kx tan tx + ky tan ty) Δz}; exit waves keep it; pinned on a 90 x 75 grid (plane wave and probe), CPU and Metal; a `.metal` batch must share one tilt (0.3.0). Tilt ensembles (distributions of tilts) not offered | study |
+| `PlaneWave(tilt=)`, `Probe(tilt=)`, `Waves.base_tilt` | `Waves.planeWave(beam:grid:tilt:)`, `Probe(…tilt:)`, `Waves.tilt` [mrad] | **present**: as abTEM the tilt is metadata that enters the Fresnel propagator, e^{−2πi (kx tan tx + ky tan ty) Δz}; exit waves keep it, and so does a wave through a CTF (0.6.0); pinned on a 90 x 75 grid (plane wave and probe), CPU and Metal; a `.metal` batch must share one tilt (0.3.0), and a batch on either backend one energy (0.6.0, `mixedEnergies`). Tilt ensembles (distributions of tilts) not offered | study |
 | `Waves(array, energy, extent, sampling, reciprocal_space, ensemble_axes_metadata, metadata)` | `Waves(field:grid:beam:normalization:tilt:)` | **partial**: one two-dimensional wave in real space with its tilt; no ensemble axes, reciprocal-space storage or other metadata; `normalization` is `.values` or `.reciprocalSpace` | useful |
 | `Probe(semiangle_cutoff, energy, extent, gpts, sampling, soft=True, aperture, aberrations)` | `Probe(beam:grid:aperture:aberrations:tilt:)` | **partial**: `tilt` offered (0.3.0); no `scan_positions`, `metadata`, distributions of parameters, or aberration coefficients as keywords (set on `Aberrations`); a probe is rebuilt to change a parameter | useful |
 | `Probe.build(scan=)` | `Probe.build(at:)` | **partial**: one position per call (a scan: `STEM.scan`); `scan=` as a grid of positions not offered | useful |
@@ -102,7 +102,7 @@ detector, the Gaussian source size and Poisson noise on a scan.
 | `Waves.intensity()` | `Waves.intensity()` | **present** | useful |
 | `Waves.diffraction_patterns(max_angle="cutoff" or "full", fftshift=True)` | `Waves.diffractionPattern(maxAngle:)` | **partial**: `"valid"`, a numeric angle, `block_direct`, `return_complex`, `renormalize=False`, `fftshift=False` and `parity` other than "odd" not offered | useful |
 | `Waves.phase()`, `.real()`, `.imag()`, `.to_images()` | `ComplexField.real`, `.imaginary`, `.squaredMagnitude()` | **partial**: raw arrays; no phase helper and no image-returning methods | useful |
-| `Waves.apply_ctf(ctf)` (HRTEM image formation) | `Waves.applying(_:)` | **present**: the `**kwargs` shorthand that builds a CTF is not offered | useful |
+| `Waves.apply_ctf(ctf)` (HRTEM image formation) | `Waves.applying(_:)` | **present**: keeps the wave's tilt, as abTEM keeps `base_tilt` (0.6.0); the `**kwargs` shorthand that builds a CTF is not offered | useful |
 | `Waves.normalize`, `.tile`, `.downsample`, `.convolve`, `.phase_shift`, `.ensure_reciprocal_space`, `.ensure_real_space` | | **missing**: planned as needed: SimulatoCore | useful |
 | `Waves.scan`, `.depth_profile`, `.show_depth_profile`, `.show`, `Probe.profiles`, `.ctf`, `.show` | | **missing**: not planned: plotting and lazy-array helpers | not planned |
 | `Waves.transition_potential_multislice`, `Probe.transition_potential_scan` | | **missing**: not planned: inelastic scattering (see Other abTEM capabilities) | not planned |
@@ -260,6 +260,8 @@ and parked for later (quiet-run benchmarks #5, real cells #6, FFT path #43). Spe
 - **Rows measured on a loaded machine:** `fft2+ifft2` at 192² to 512², multislice and frozen phonons at 192², the probe build
   at 192² to 512² against abTEM float32; re-measure in a quiet run before changing anything.
 - **Metal:** the bounds hold to 100 slices and grids to 1024²; past 300 slices with the renormalisation is not measured.
+  `MetalAccuracy.covers(nx:ny:slices:)` says whether a run lies inside that range (0.6.0). The kit neither refuses a run
+  beyond it nor falls back to `.cpu` (a 2048² run on the CPU takes hours): the caller decides, and the app marks such a result.
 - **Not ported:** `CrystalPotential` (a unit potential repeated, frozen phonons per cell; its API is undecided); non-orthogonal
   boxes in `AtomicStructure` and `periodic=False` (a crystal is turned and cut by `SlabBuilder` first; the kit keeps its own
   structure types, `docs/adr/0001-standalone-structure-types.md`); finite projection; the Kirkland, Peng and Ewald parametrisations;

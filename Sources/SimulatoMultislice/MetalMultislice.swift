@@ -58,6 +58,9 @@ extension Multislice {
     /// `options.maximumCPUThreads` threads from the shared transmission functions, on `.metal` in batches whose waves fit
     /// in `options.metalBatchBytes`, the transmissions built on the GPU.
     ///
+    /// - Throws: `SimulatoError.gridMismatch` for a wave on another grid, `mixedEnergies` for waves of different energies,
+    ///   `invalidTilt` for different tilts on `.metal`.
+    ///
     /// Cancellation is checked after every round of one wave per thread on `.cpu` and every chunk of slices on `.metal`
     /// (`CancellationError`); `progress` counts the waves done, at most once per `options.progressInterval`.
     public static func runBatch(_ incidents: [Waves], through potential: ProjectedPotential,
@@ -65,6 +68,7 @@ extension Multislice {
                                 progress: SimulationProgressHandler? = nil) throws -> [Waves] {
         guard let first = incidents.first else { return [] }
         for w in incidents where !w.grid.matches(potential.grid) { throw SimulatoError.gridMismatch }
+        try checkSharedEnergy(incidents)
         var reporter = ProgressReporter(progress, interval: options.progressInterval)
         reporter.report(batchPreparing(incidents.count))
         try Task.checkCancellation()
@@ -85,6 +89,7 @@ extension Multislice {
                                 progress: SimulationProgressHandler? = nil) throws -> [Waves] {
         guard let first = incidents.first else { return [] }
         for w in incidents where !w.grid.matches(potential.grid) { throw SimulatoError.gridMismatch }
+        try checkSharedEnergy(incidents)
         var reporter = ProgressReporter(progress, interval: options.progressInterval)
         reporter.report(batchPreparing(incidents.count))
         try Task.checkCancellation()
@@ -118,6 +123,14 @@ extension Multislice {
                                                fraction: Double(out.count) / Double(count)))
         }
         return out
+    }
+
+    /// A batch shares its transmission functions and propagators, so its waves must share their energy (both backends).
+    static func checkSharedEnergy(_ incidents: [Waves]) throws {
+        let first = incidents[0].beam.energy
+        if let other = incidents.first(where: { $0.beam.energy != first }) {
+            throw SimulatoError.mixedEnergies(first: first, other: other.beam.energy)
+        }
     }
 
     /// A Metal batch shares its propagators, so its waves must share their tilt.

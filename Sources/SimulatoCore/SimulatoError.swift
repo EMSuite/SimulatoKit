@@ -41,6 +41,9 @@ public enum SimulatoError: Error, Sendable, Equatable, CustomStringConvertible {
     case partialOccupancy(site: Int, occupancy: Double)
     /// A slab of `count` atoms, more than the `limit` allowed.
     case tooManyAtoms(count: Int, limit: Int)
+    /// The waves of one batch have different energies [eV]: the first wave's and another's (a batch shares its
+    /// transmission functions and propagators).
+    case mixedEnergies(first: Double, other: Double)
 
     public var description: String {
         switch self {
@@ -75,6 +78,8 @@ public enum SimulatoError: Error, Sendable, Equatable, CustomStringConvertible {
         case .partialOccupancy(let i, let o):
             return "site \(i) is only partly occupied (\(o)); the slab takes whole atoms"
         case .tooManyAtoms(let n, let limit): return "the slab would hold \(n) atoms, more than the \(limit) allowed"
+        case .mixedEnergies(let first, let other):
+            return "the waves of one batch must share one energy, got \(first) eV and \(other) eV; run each energy separately"
         }
     }
 }
