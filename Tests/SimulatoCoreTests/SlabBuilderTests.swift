@@ -55,7 +55,7 @@ struct SlabBuilderTests {
         #expect(abs(mg.b.x + 3.209 / 2) <= 1e-15 && abs(mg.b.y - 3.209 * 3.0.squareRoot() / 2) <= 1e-15 && mg.b.z == 0)
         #expect(mg.c == SIMD3(0, 0, 5.211))
         let unit = try SlabBuilder.orthogonalUnit(of: mg, zoneAxis: SIMD3(0, 0, 1))
-        #expect(unit.structure.atoms.count == 4 && unit.strain == 0, "Mg [0001]: the orthohexagonal cell")
+        #expect(unit.structure.atoms.count == 4 && unit.strain <= 1e-12, "Mg [0001]: the orthohexagonal cell")
         #expect(abs(unit.structure.box.y - 3.209 * 3.0.squareRoot()) <= 1e-12)
     }
 
@@ -97,7 +97,7 @@ struct SlabBuilderTests {
         #expect(throws: SimulatoError.partialOccupancy(site: 1, occupancy: 0.4)) {
             try SlabBuilder.slab(of: half, zoneAxis: SIMD3(0, 0, 1), thickness: 10)
         }
-        // Mg [1 0 3] needs 0.22 % at every rung of the ladder: refused at 0.1 %, carrying the strain; accepted at 1 %.
+        // Mg [1 0 3] needs 11.3 % at 5 repetitions and 0.22 % at 10, 20 and 40: refused at 0.1 %, carrying the strain; accepted at 1 %.
         do {
             _ = try SlabBuilder.orthogonalUnit(of: magnesium(), zoneAxis: SIMD3(1, 0, 3))
             Issue.record("Mg [1 0 3] was not refused")

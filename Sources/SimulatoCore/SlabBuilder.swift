@@ -108,6 +108,8 @@ public enum SlabBuilder {
     static let rowSearch = 10
     /// The z shifts tried: j h / 720 for j = 0 ... 719, h the slice height.
     static let shiftSteps = 720
+    /// The most atoms one orthogonal unit may have.
+    public static let unitAtomLimit = 10_000_000
 
     /// The orthogonal unit at a fixed number of repetitions (abTEM's `orthogonalize_cell(max_repetitions:)`), whatever its
     /// strain.
@@ -295,7 +297,8 @@ public enum SlabBuilder {
         let orthogonal = turned[0].y == 0 && turned[0].z == 0 && turned[1].x == 0 && turned[1].z == 0
             && turned[2].x == 0 && turned[2].y == 0
         let v: [SIMD3<Double>]
-        if orthogonal && turned[0].x == box.x && turned[1].y == box.y && turned[2].z == box.z {
+        let unchanged = orthogonal && turned[0].x == box.x && turned[1].y == box.y && turned[2].z == box.z
+        if unchanged {  // abTEM's early return: the cell as it is, no transform
             v = [SIMD3(1, 0, 0), SIMD3(0, 1, 0), SIMD3(0, 0, 1)]
         } else {
             guard let inv = Lattice.inverse(turned) else { throw SimulatoError.invalidCell("the turned cell has no inverse") }
@@ -312,7 +315,7 @@ public enum SlabBuilder {
         guard let newInverse = Lattice.inverse(newCell) else {
             throw SimulatoError.invalidCell("no orthogonal cell within \(repetitions) repetitions")
         }
-        let affine = Lattice.matmul(newInverse, d)
+        let affine = unchanged ? [SIMD3<Double>(1, 0, 0), SIMD3(0, 1, 0), SIMD3(0, 0, 1)] : Lattice.matmul(newInverse, d)
 
         // The atoms of the new cell: every site in every cell translation that covers it, kept when its fractional
         // coordinates in the new cell lie in [0, 1) (within 1e-9 of an integer counts as that integer).
@@ -320,6 +323,9 @@ public enum SlabBuilder {
                        SIMD3(1, 0, 1), SIMD3(1, 1, 0), SIMD3(1, 1, 1)].map { Lattice.vecmat($0, v) }
         let lo = SIMD3((0..<3).map { a in Int(corners.map { $0[a] }.min()!.rounded(.down)) })
         let hi = SIMD3((0..<3).map { a in Int(corners.map { $0[a] }.max()!.rounded(.up)) })
+        guard cells * Double(cell.sites.count) <= Double(unitAtomLimit) else {
+            throw SimulatoError.tooManyAtoms(count: Int(cells) * cell.sites.count, limit: unitAtomLimit)
+        }
         let expected = Int(cells) * cell.sites.count
         var atoms: [AtomicStructure.Atom] = []
         atoms.reserveCapacity(expected)
@@ -327,7 +333,7 @@ public enum SlabBuilder {
             for t0 in lo.x...hi.x {
                 for t1 in lo.y...hi.y {
                     for t2 in lo.z...hi.z {
-                        let f = site.fractional + SIMD3(Double(t0), Double(t1), Double(t2))
+                        let f = wrapped(site.fractional) + SIMD3(Double(t0), Double(t1), Double(t2))
                         var s = Lattice.vecmat(f, vInverse)
                         for a in 0..<3 {
                             let r = s[a].rounded(.toNearestOrEven)
@@ -345,10 +351,21 @@ public enum SlabBuilder {
             throw SimulatoError.invalidCell("the cut kept \(atoms.count) of \(expected) atoms")
         }
         let (scale, shear) = decompose(affine)
-        let orientation = simd_double3x3(columns: (rt[0], rt[1], rt[2]))  // columns = rows of R: box axes in the crystal
+        // The columns are the rows of R: the box's axes written in the crystal's frame.
+        let orientation = simd_double3x3(columns: (rotation[0], rotation[1], rotation[2]))
         return OrthogonalUnit(structure: try AtomicStructure(box: box, atoms: atoms),
                               supercell: v.map { SIMD3(Int($0.x), Int($0.y), Int($0.z)) },
                               maximumRepetitions: repetitions, scale: scale, shear: shear, orientation: orientation)
+    }
+
+    /// A fractional position wrapped into [0, 1) (within 1e−9 of 1 counts as 0).
+    static func wrapped(_ f: SIMD3<Double>) -> SIMD3<Double> {
+        var w = f
+        for a in 0..<3 {
+            w[a] -= w[a].rounded(.down)
+            if w[a] >= 1 - 1e-9 { w[a] = 0 }
+        }
+        return w
     }
 
     /// abTEM's `decompose_affine_transform`: ZS = chol(AᵀA)ᵀ, scale = diag ZS, shear = (ZS₀₁/s₀, ZS₀₂/s₀, ZS₁₂/s₁); the

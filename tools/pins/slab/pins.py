@@ -104,7 +104,7 @@ CASES = [("Al", (0, 0, 1)), ("Al", (1, 1, 0)), ("Al", (1, 1, 1)), ("Al", (1, 1, 
          ("Mg", (0, 0, 1)), ("Mg", (1, 0, 0)), ("Mg", (1, 0, 1)),
          ("SrTiO3", (0, 0, 1)), ("SrTiO3", (1, 1, 0)),
          ("beta2", (0, 1, 0)), ("beta2", (1, 0, 0))]
-REFUSED = [("Mg", (1, 0, 3))]  # 0.22 % at every rung: the ladder refuses it at 0.1 %
+REFUSED = [("Mg", (1, 0, 3))]  # 11.3 % at 5, 0.22 % at 10, 20 and 40: refused at 0.1 %
 
 # py4DSTEM's plain matrices on its own cells, copied from DiffractoKit's Tests/DiffractoCoreTests/Fixtures/
 # crystal-orientation-pins.json (py4DSTEM f050d207 `parse_orientation`, in-plane angle 0): `cell` rows are a, b, c in A;
