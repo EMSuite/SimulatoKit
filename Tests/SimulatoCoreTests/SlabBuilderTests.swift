@@ -76,6 +76,24 @@ struct SlabBuilderTests {
         }
     }
 
+    /// The slab's z is depth below the entrance face (#126): along [0 0 1] the zone axis points at the source, so a gold
+    /// layer at the top of the cell (z = 0.9 c) is met first and a carbon layer at 0.1 c last; along [0 0 −1] the reverse.
+    @Test func theFaceNearestTheSourceIsAtDepthZero() throws {
+        let layered = try CrystalCell(a: 4, b: 4, c: 10, alpha: 90, beta: 90, gamma: 90, sites: [
+            CrystalCell.Site(atomicNumber: 79, fractional: SIMD3(0, 0, 0.9)),
+            CrystalCell.Site(atomicNumber: 6, fractional: SIMD3(0.5, 0.5, 0.1)),
+        ])
+        let cases: [(zone: SIMD3<Int>, goldFirst: Bool)] = [(SIMD3(0, 0, 1), true), (SIMD3(0, 0, -1), false)]
+        for (zone, goldFirst) in cases {
+            let slab = try SlabBuilder.slab(of: layered, zoneAxis: zone, thickness: 10, sliceThickness: 1)
+            #expect(slab.repeats.z == 1 && slab.structure.atoms.count == 2)
+            let gold: Double = slab.structure.atoms.first(where: { $0.atomicNumber == 79 })!.position.z
+            let carbon: Double = slab.structure.atoms.first(where: { $0.atomicNumber == 6 })!.position.z
+            #expect((gold < carbon) == goldFirst, "\(zone): gold at depth \(gold) Å, carbon at \(carbon) Å")
+            #expect(abs(abs(carbon - gold) - 8) <= 1e-9, "\(zone): the layers stay 8 Å apart")
+        }
+    }
+
     @Test func badInputsAreTypedRefusals() throws {
         let al = try aluminium()
         #expect(throws: SimulatoError.invalidZoneAxis("[0 0 0] is no direction")) {

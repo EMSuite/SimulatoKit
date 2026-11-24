@@ -4,7 +4,7 @@ crystal's Miller indices, at every stored thickness (abTEM 1.0.10 `DiffractionPa
 Writes Tests/SimulatoKitParityTests/Fixtures/beam-intensities-pins.json:
 
 * cases: Si [110], Si [111] and Mg [0001] at 200 kV, the kit's slab (the orthogonal unit of `tools/pins/slab/pins.py`,
-  one unit laterally, slices of at most 1 A that repeat with the period, the kit's z shift), stored after five whole
+  one unit laterally, slices of at most 1 A that repeat with the period, the kit's z shift and mirror to depth), stored after five whole
   numbers of periods from about 2 to 100 nm. For each case: the grid, the periods stored, the exit planes, and for every
   zero-order Laue zone beam inside the antialias aperture its crystal hkl and its intensity at each stored thickness.
 
@@ -75,7 +75,7 @@ def slab_atoms(u, periods):
     if margin < 0.05:
         raise SystemExit(f"plane margin {margin}")
     pos = np.array(u["positions"])
-    pos[:, 2] = (pos[:, 2] + delta) % period
+    pos[:, 2] = slab.to_depth((pos[:, 2] + delta) % period, period)
     numbers = u["numbers"] * periods
     positions = np.concatenate([pos + [0, 0, m * period] for m in range(periods)])
     box = [u["box"][0], u["box"][1], period * periods]

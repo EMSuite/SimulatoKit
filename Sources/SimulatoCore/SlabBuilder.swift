@@ -17,13 +17,17 @@
 //       coordinates within 1e−9 of an integer are that integer), so every one of det(V) × the cell's atoms is kept.
 //    4. abTEM's affine transform A = (V · cell)⁻¹ · box puts the new cell on the box; its scale and shear
 //       (`decompose_affine_transform`) are the strain the unit carries. Coordinates within 1e−6 Å of a face are set on it.
+//    5. The slab turns z into depth (#126): the unit's z points at the source, while the multislice transmits from z = 0
+//       along +z as abTEM does, so the slab mirrors z → period − z in every unit. Mirroring crystal and beam together
+//       leaves every exit wave's (x, y) as it was, so images and patterns stay as seen from the source.
 //
 
 import simd
 
 /// The orthogonal repeat unit of a crystal along a zone axis.
 public struct OrthogonalUnit: Sendable, Hashable {
-    /// The unit: its box and atoms in Cartesian coordinates [Å], the zone axis along z.
+    /// The unit: its box and atoms in Cartesian coordinates [Å], the zone axis along +z, pointing at the source (a `Slab`
+    /// mirrors it to depth for the multislice).
     public let structure: AtomicStructure
     /// The rows of the integer matrix V: box x, y and z as n₁a + n₂b + n₃c. det V cells make the unit.
     public let supercell: [SIMD3<Int>]
@@ -84,17 +88,18 @@ public struct OrthogonalUnit: Sendable, Hashable {
 
 /// A slab of crystal along a zone axis, ready for the multislice.
 public struct Slab: Sendable, Hashable {
-    /// The slab: the unit repeated, shifted along z by ``zShift`` and wrapped into its box.
+    /// The slab: the unit shifted along z by ``zShift``, wrapped into its box, mirrored to depth (z → period − z) and
+    /// repeated. z is the depth below the entrance face, the face nearest the source: the multislice meets z = 0 first.
     public let structure: AtomicStructure
-    /// The orthogonal unit it repeats (before the shift).
+    /// The orthogonal unit it repeats (before the shift and the mirror; its z points at the source).
     public let unit: OrthogonalUnit
     /// How many units along x, y and z.
     public let repeats: SIMD3<Int>
     /// The slices to cut it in: k equal slices per period (k = ⌈period / requested thickness⌉), the same in every period.
     /// Pass them to `Potential(structure:nx:ny:sliceThicknesses:)`.
     public let sliceThicknesses: [Double]
-    /// How far the atoms were moved along z [Å], within one slice: the shift that keeps every atomic plane farthest from a
-    /// slice boundary.
+    /// How far the atoms were moved along the unit's z [Å], within one slice, before the mirror: the shift that keeps every
+    /// atomic plane farthest from a slice boundary (the mirror keeps that distance, as the boundaries repeat with the period).
     public let zShift: Double
 
     /// The crystal's repeat along the beam [Å].
@@ -204,11 +209,13 @@ public enum SlabBuilder {
         let h = box.z / Double(k)
         let z = unit.structure.atoms.map(\.position.z)
         let shift = zShift(z, sliceHeight: h)
+        func intoBox(_ z: Double) -> Double {
+            let w = z.truncatingRemainder(dividingBy: box.z)
+            return w < 0 ? w + box.z : w
+        }
         let shifted = unit.structure.atoms.map { atom -> AtomicStructure.Atom in
             var p = atom.position
-            var w = (p.z + shift).truncatingRemainder(dividingBy: box.z)
-            if w < 0 { w += box.z }
-            p.z = w
+            p.z = intoBox(box.z - intoBox(p.z + shift))  // shifted, then mirrored to depth below the entrance face
             return AtomicStructure.Atom(atomicNumber: atom.atomicNumber, position: p)
         }
         let structure = try AtomicStructure(box: box, atoms: shifted).repeated(repeats.x, repeats.y, repeats.z)
