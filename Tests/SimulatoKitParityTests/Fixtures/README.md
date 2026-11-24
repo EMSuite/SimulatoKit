@@ -3,7 +3,7 @@
 Every committed fixture of the kit lives in this folder and is read by `SimulatoKitParityTests` (the target excludes the
 folder from its sources; the tests open the files by path). Each `*-pins.json` holds the scalars, shapes, versions and the
 index into its `*-arrays.bin` sidecar (float64 little-endian, complex as interleaved re, im), whose sha256 the JSON records.
-32 files, 22.7 MB.
+34 files, 23.4 MB.
 
 Every file is regenerated in place by the generator named in its row, from the repo root with the environment in
 `tools/README.md`: `.venv/bin/python -I -B tools/pins/<subject>/pins.py`. A regeneration that changes an `*-arrays.bin`
@@ -46,5 +46,7 @@ GPL-3.0-only licence. No fixture is measured data, and the text fixtures carry n
 | `cbed-series-arrays.bin` | 206.0 KB | `tools/pins/cbed-series/pins.py` | |
 | `hrtem-si110-pins.json` | 2.6 KB | `tools/pins/hrtem-si110/pins.py` | the Si [110] HRTEM chain: slab, exit planes at 2, 5 and 10 nm, images at Scherzer defocus with partial coherence |
 | `hrtem-si110-arrays.bin` | 307.1 KB | `tools/pins/hrtem-si110/pins.py` | |
+| `atom-models-pins.json` | 40.7 KB | `tools/pins/atom-models/pins.py` | specimens from atom models: Al with a vacancy, a Σ5 (310) bicrystal, an orthorhombic cell with the beam along a, b and c (`orthogonalize_cell(plane=)`), ASE `center(vacuum=)` padding |
+| `atom-models-arrays.bin` | 621.4 KB | `tools/pins/atom-models/pins.py` | |
 
 The file names keep the development slice they were written in (`slice-N`); the tests open them by these names.
