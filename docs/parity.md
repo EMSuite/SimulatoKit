@@ -4,8 +4,8 @@ The coverage table of abTEM 1.0.10 (`References/python/abtem`, git `164e644`): i
 the source in `site-packages/abtem` against SimulatoKit. Rewritten for 0.3.0 (the growing phase's kit audit); every row
 has one state and one priority.
 
-**Totals (130 rows): 38 present, 42 partial, 50 missing.** By priority: **study** 27 rows (12 present, 8 partial, 7 missing);
-**useful** 81 (26, 34, 21); **not planned** 22 (all missing, each with its reason).
+**Totals (131 rows): 39 present, 42 partial, 50 missing.** By priority: **study** 27 rows (12 present, 8 partial, 7 missing);
+**useful** 82 (27, 34, 21); **not planned** 22 (all missing, each with its reason).
 
 States:
 
@@ -104,6 +104,7 @@ detector, the Gaussian source size and Poisson noise on a scan.
 | `Waves.diffraction_patterns(max_angle="cutoff" or "full", fftshift=True)` | `Waves.diffractionPattern(maxAngle:)` | **partial**: `"valid"`, a numeric angle, `block_direct`, `return_complex`, `renormalize=False`, `fftshift=False` and `parity` other than "odd" not offered | useful |
 | `Waves.phase()`, `.real()`, `.imag()`, `.to_images()` | `ComplexField.real`, `.imaginary`, `.squaredMagnitude()` | **partial**: raw arrays; no phase helper and no image-returning methods | useful |
 | `Waves.apply_ctf(ctf)` (HRTEM image formation) | `Waves.applying(_:)` | **present**: keeps the wave's tilt, as abTEM keeps `base_tilt` (0.6.0); the `**kwargs` shorthand that builds a CTF is not offered | useful |
+| `Waves.apply_ctf(CTF(defocus=…)).intensity()` over a defocus list and exit planes, `Images.tile` | `ContrastTransferFunction.images(of:defocus:tile:)` | **present**: an HRTEM series from stored exit waves (#88): each wave transformed once, each image equal to `applying` then `intensity()` bit for bit; pinned on SrTiO₃ [001] (four exit planes, four defocus values, one series tiled 2 x 3) at the image bound (1e−10 with `.abTEMFloat32`, 1e−6 with `.exact`); CPU only (Metal: #89) | useful |
 | `Waves.normalize`, `.tile`, `.downsample`, `.convolve`, `.phase_shift`, `.ensure_reciprocal_space`, `.ensure_real_space` | | **missing**: planned as needed: SimulatoCore | useful |
 | `Waves.scan`, `.depth_profile`, `.show_depth_profile`, `.show`, `Probe.profiles`, `.ctf`, `.show` | | **missing**: not planned: plotting and lazy-array helpers | not planned |
 | `Waves.transition_potential_multislice`, `Probe.transition_potential_scan` | | **missing**: not planned: inelastic scattering (see Other abTEM capabilities) | not planned |

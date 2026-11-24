@@ -186,6 +186,13 @@ func checkProbe(_ r: inout Report) {
         r.near("a pure-phase CTF conserves the total intensity (Parseval)", blurred.totalIntensity, probe.totalIntensity, 1e-15)
         r.check("applying keeps grid, beam, normalisation; the pure-phase CTF changes the wave",
                 blurred.grid == g && blurred.beam == beam && blurred.normalization == .reciprocalSpace && blurred != probe)
+        let series = try pure.images(of: [probe, plane], defocus: [-50, ab.defocus, 120], tile: (x: 2, y: 1))
+        let alone = try probe.applying(pure).intensity().tiled(repetitionsX: 2, repetitionsY: 1)
+        r.check("images(of:defocus:tile:) gives [wave][defocus], each equal to applying then intensity",
+                series.count == 2 && series[0].count == 3 && series[0][1] == alone && series[1][0].nx == 64)
+        r.refusesCase("an image series with a NaN defocus", "invalidAberration") {
+            try pure.images(of: [probe], defocus: [.nan])
+        }
         r.refusesCase("CTF with an infinite aberration", "invalidAberration") {
             var bad = Aberrations(); bad.C10 = .infinity
             return try ContrastTransferFunction(aberrations: bad)

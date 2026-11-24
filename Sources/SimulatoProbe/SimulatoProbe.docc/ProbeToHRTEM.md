@@ -79,6 +79,15 @@ let ctf = try ContrastTransferFunction(aberrations: lens, focalSpread: 30)
 let image = try exit.applying(ctf).intensity()     // the HRTEM image
 ```
 
+For a series over defocus and thickness, store the exit waves at several planes and call
+``ContrastTransferFunction/images(of:defocus:tile:)``. Each wave is transformed once, and each image equals
+`applying` then `intensity()` at its defocus:
+
+```swift
+let exits = try Multislice.run(.planeWave(beam: beam, grid: potential.grid), through: potential, exitPlanes: .every(4))
+let series = try ctf.images(of: exits, defocus: [-200, 0, 150, 400], tile: (x: 2, y: 2))   // series[plane][defocus]
+```
+
 ### Closed forms
 
 For a given Cs and beam energy:
