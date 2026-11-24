@@ -34,6 +34,7 @@ GPL-3.0-only licence. No fixture is measured data, and the text fixtures carry n
 | `icom-arrays.bin` | 41.6 KB | `tools/pins/icom/pins.py` | |
 | `slab-pins.json` | 199.0 KB | `tools/pins/slab/pins.py` | orthogonal units along zone axes, the repetition ladder, the Si [110] slab |
 | `slab-arrays.bin` | 92.2 KB | `tools/pins/slab/pins.py` | |
+| `beam-intensities-pins.json` | 90.1 KB | `tools/pins/beam-intensities/pins.py` | beam intensities by hkl at five thicknesses: Si [110], Si [111], Mg [0001]; the thin Si [110] 002 series |
 | `kirkland-pins.json` | 127.5 KB | `tools/pins/kirkland/pins.py` | the Kirkland parameterisation: f(k²) for Z = 1 to 103, single atoms, the Si [110] slab's exit wave |
 | `kirkland-arrays.bin` | 183.8 KB | `tools/pins/kirkland/pins.py` | (the generator also writes `Sources/SimulatoMultislice/KirklandTable.swift`) |
 
