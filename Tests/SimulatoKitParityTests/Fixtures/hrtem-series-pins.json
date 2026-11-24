@@ -1,0 +1,242 @@
+{
+ "Cs": 12000000.0,
+ "arrays": {
+  "bytes": 1310720,
+  "file": "hrtem-series-arrays.bin",
+  "index": {
+   "plane0.defocus0": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 0,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane0.defocus1": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 32768,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane0.defocus2": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 65536,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane0.defocus3": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 98304,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane1.defocus0": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 131072,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane1.defocus1": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 163840,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane1.defocus2": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 196608,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane1.defocus3": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 229376,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane2.defocus0": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 262144,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane2.defocus1": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 294912,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane2.defocus2": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 327680,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane2.defocus3": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 360448,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane3.defocus0": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 393216,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane3.defocus1": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 425984,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane3.defocus2": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 458752,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "plane3.defocus3": {
+    "count": 4096,
+    "kind": "f8",
+    "offset": 491520,
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "tiled.defocus0": {
+    "count": 24576,
+    "kind": "f8",
+    "offset": 524288,
+    "shape": [
+     128,
+     192
+    ]
+   },
+   "tiled.defocus1": {
+    "count": 24576,
+    "kind": "f8",
+    "offset": 720896,
+    "shape": [
+     128,
+     192
+    ]
+   },
+   "tiled.defocus2": {
+    "count": 24576,
+    "kind": "f8",
+    "offset": 917504,
+    "shape": [
+     128,
+     192
+    ]
+   },
+   "tiled.defocus3": {
+    "count": 24576,
+    "kind": "f8",
+    "offset": 1114112,
+    "shape": [
+     128,
+     192
+    ]
+   }
+  },
+  "sha256": "0e5d24bb7c8bdd9fbea44f93a4a2d64c29f4180586af6be7750f1df8ff542edf"
+ },
+ "defocus": [
+  -200.0,
+  0.0,
+  150.0,
+  400.0
+ ],
+ "energy": 300000.0,
+ "exit_planes_every": 4,
+ "extent": [
+  7.81,
+  7.81
+ ],
+ "focal_spread": 30.0,
+ "gpts": [
+  64,
+  64
+ ],
+ "planes": 4,
+ "self_checks": [
+  "ok  exit planes: incident, after 4, 8, and the last of 10: 0.000e+00 <= 0e+00",
+  "ok  plane 0 defocus -200.0 image text vs abTEM: 0.000e+00 <= 1e-12",
+  "ok  plane 0 defocus 0.0 image text vs abTEM: 0.000e+00 <= 1e-12",
+  "ok  plane 0 defocus 150.0 image text vs abTEM: 0.000e+00 <= 1e-12",
+  "ok  plane 0 defocus 400.0 image text vs abTEM: 0.000e+00 <= 1e-12",
+  "ok  plane 1 defocus -200.0 image text vs abTEM: 4.622e-16 <= 1e-12",
+  "ok  plane 1 defocus 0.0 image text vs abTEM: 5.093e-16 <= 1e-12",
+  "ok  plane 1 defocus 150.0 image text vs abTEM: 5.033e-16 <= 1e-12",
+  "ok  plane 1 defocus 400.0 image text vs abTEM: 5.376e-16 <= 1e-12",
+  "ok  plane 2 defocus -200.0 image text vs abTEM: 3.661e-16 <= 1e-12",
+  "ok  plane 2 defocus 0.0 image text vs abTEM: 4.370e-16 <= 1e-12",
+  "ok  plane 2 defocus 150.0 image text vs abTEM: 4.405e-16 <= 1e-12",
+  "ok  plane 2 defocus 400.0 image text vs abTEM: 4.055e-16 <= 1e-12",
+  "ok  plane 3 defocus -200.0 image text vs abTEM: 3.412e-16 <= 1e-12",
+  "ok  plane 3 defocus 0.0 image text vs abTEM: 3.954e-16 <= 1e-12",
+  "ok  plane 3 defocus 150.0 image text vs abTEM: 4.026e-16 <= 1e-12",
+  "ok  plane 3 defocus 400.0 image text vs abTEM: 3.554e-16 <= 1e-12",
+  "ok  tiled defocus -200.0 is the image repeated: 0.000e+00 <= 0e+00",
+  "ok  tiled defocus 0.0 is the image repeated: 0.000e+00 <= 0e+00",
+  "ok  tiled defocus 150.0 is the image repeated: 0.000e+00 <= 0e+00",
+  "ok  tiled defocus 400.0 is the image repeated: 0.000e+00 <= 0e+00"
+ ],
+ "semiangle_cutoff": 20.0,
+ "slice_thickness": 1.9525,
+ "structure": "SrTiO3 [001], 2 x 2 x 5 cells, a = 3.905",
+ "tile": [
+  2,
+  3
+ ],
+ "versions": {
+  "abtem": "1.0.10",
+  "numpy": "2.5.4"
+ }
+}

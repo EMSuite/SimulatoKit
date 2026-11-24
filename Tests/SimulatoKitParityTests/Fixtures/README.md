@@ -20,6 +20,8 @@ GPL-3.0-only licence. No fixture is measured data, and the text fixtures carry n
 | `slice-2-arrays.bin` | 1.4 MB | `tools/pins/stem-detectors/pins.py` | |
 | `slice-3-pins.json` | 7.2 KB | `tools/pins/ctf/pins.py` | CTF kernels and HRTEM images |
 | `slice-3-arrays.bin` | 1.5 MB | `tools/pins/ctf/pins.py` | |
+| `hrtem-series-pins.json` | 4.6 KB | `tools/pins/hrtem-series/pins.py` | HRTEM image series over defocus and exit planes, one tiled |
+| `hrtem-series-arrays.bin` | 1.3 MB | `tools/pins/hrtem-series/pins.py` | |
 | `slice-4-pins.json` | 2.6 KB | `tools/pins/sampling-tilt/pins.py` | any grid size, `Potential(sampling:)`, beam tilt |
 | `slice-4-arrays.bin` | 421.9 KB | `tools/pins/sampling-tilt/pins.py` | |
 | `slice-4-scan-pins.json` | 1.3 KB | `tools/pins/scan-patterns/pins.py` | `GridScan(sampling:)`, centre of mass, Gaussian source size |

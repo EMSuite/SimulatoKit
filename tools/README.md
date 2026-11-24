@@ -39,6 +39,7 @@ committed fixtures were written on a Mac; Linux reproduces them to float noise (
 | `pins/potential-multislice/pins.py` | `slice-1-pins.json`, `slice-1-arrays.bin`, `Sources/SimulatoMultislice/LobatoTable.swift` |
 | `pins/stem-detectors/pins.py` | `slice-2-pins.json`, `slice-2-arrays.bin` (imports `potential-multislice`) |
 | `pins/ctf/pins.py` | `slice-3-pins.json`, `slice-3-arrays.bin` (imports `potential-multislice`) |
+| `pins/hrtem-series/pins.py` | `hrtem-series-pins.json`, `hrtem-series-arrays.bin` (imports `potential-multislice` and `ctf`) |
 | `pins/sampling-tilt/pins.py` | `slice-4-pins.json`, `slice-4-arrays.bin` |
 | `pins/scan-patterns/pins.py` | `slice-4-scan-pins.json`, `slice-4-scan-arrays.bin` |
 | `pins/waves/pins.py` | `waves-pins.json`, `waves-arrays.bin` |

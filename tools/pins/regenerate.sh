@@ -6,8 +6,8 @@ set -euo pipefail
 PYTHON=${PYTHON:-.venv/bin/python}
 
 # Generators that write fixture files (tools/README.md lists what each writes). stem-detectors and ctf import
-# potential-multislice, which therefore runs first.
-writers=(potential-multislice stem-detectors ctf sampling-tilt scan-patterns waves icom linescan slab kirkland)
+# potential-multislice, which therefore runs first; hrtem-series imports both potential-multislice and ctf.
+writers=(potential-multislice stem-detectors ctf hrtem-series sampling-tilt scan-patterns waves icom linescan slab kirkland)
 # Generators that print the numbers a test holds inline. They run so a broken reference shows here; their output goes to
 # the log and is not compared (the numbers live in the Swift test files).
 printers=(potential-project-tile polar crystal-slices image-interpolate azimuthal linescan-defaults)
