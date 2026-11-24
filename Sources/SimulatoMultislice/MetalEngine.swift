@@ -308,7 +308,7 @@ extension MetalMultislice {
 
     static func prepare(_ potential: Potential, beam: ElectronBeam, tilt: SIMD2<Double> = .zero,
                         engine: MetalEngine) throws -> MetalPreparedPotential {
-        Multislice.workCounter?.countPreparation()
+        WorkCounter.current?.countPreparation()
         let grid = potential.grid
         let elements = Set(potential.atoms.map(\.atomicNumber)).sorted()
         let e = max(elements.count, 1)
@@ -346,7 +346,7 @@ extension MetalMultislice {
 
     static func prepare(_ potential: ProjectedPotential, beam: ElectronBeam, tilt: SIMD2<Double> = .zero,
                         engine: MetalEngine) throws -> MetalPreparedPotential {
-        Multislice.workCounter?.countPreparation()
+        WorkCounter.current?.countPreparation()
         let grid = potential.grid
         return MetalPreparedPotential(
             grid: grid, source: .values, indices: [], weights: [],

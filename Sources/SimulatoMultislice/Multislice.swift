@@ -122,7 +122,7 @@ public enum Multislice {
 
     /// The bandlimited transmission function of each slice, in float64 (both backends start from these).
     public static func transmissionFunctions(_ potential: ProjectedPotential, beam: ElectronBeam) throws -> [ComplexField] {
-        workCounter?.countPreparation()
+        WorkCounter.current?.countPreparation()
         let grid = potential.grid
         let fft = try FFT2D(nx: grid.nx, ny: grid.ny)
         let aperture = Antialias.aperture(on: grid)

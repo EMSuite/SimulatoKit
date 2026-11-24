@@ -69,43 +69,10 @@ public struct Probe: Sendable, Hashable {
     }
 
     /// The probe centred at `position` (x, y) [Å], in real space, Σ_k |Ψ(k)|² = 1 (so Σ_r |ψ|² = 1 / (nx ny)).
+    /// For many positions, `ProbeBuilder` does the position-independent work once.
     public func build(at position: SIMD2<Double>) throws -> Waves {
         guard position.x.isFinite, position.y.isFinite else { throw SimulatoError.invalidPosition(index: 0) }
-        let lambda = beam.wavelength
-        let kx = grid.frequenciesX, ky = grid.frequenciesY
-        let ap = aperture.values(on: grid, wavelength: lambda)
-        let ux = position.x / grid.samplingX, uy = position.y / grid.samplingY
-        let px = Grid.fftfreq(grid.nx, 1.0), py = Grid.fftfreq(grid.ny, 1.0)
-        var psi = ComplexField(nx: grid.nx, ny: grid.ny)
-        for ix in 0..<grid.nx {
-            let sx = -2 * Double.pi * px[ix] * ux
-            let (cx, snx) = (cos(sx), sin(sx))
-            for iy in 0..<grid.ny {
-                let i = ix * grid.ny + iy
-                let sy = -2 * Double.pi * py[iy] * uy
-                let (cy, sny) = (cos(sy), sin(sy))
-                // shift = e^{i sx} · e^{i sy}
-                var re = cx * cy - snx * sny
-                var im = cx * sny + snx * cy
-                re *= ap[i]
-                im *= ap[i]
-                let alpha = (kx[ix] * kx[ix] + ky[iy] * ky[iy]).squareRoot() * lambda
-                let phi = atan2(ky[iy], kx[ix])
-                let chi = aberrations.chi(alpha: alpha, phi: phi, wavelength: lambda)
-                let (c, s) = (cos(-chi), sin(-chi))
-                psi.real[i] = re * c - im * s
-                psi.imaginary[i] = re * s + im * c
-            }
-        }
-        var norm = 0.0
-        for i in psi.real.indices { norm += psi.real[i] * psi.real[i] + psi.imaginary[i] * psi.imaginary[i] }
-        let f = norm.squareRoot()
-        for i in psi.real.indices {
-            psi.real[i] /= f
-            psi.imaginary[i] /= f
-        }
-        try FFT2D(nx: grid.nx, ny: grid.ny).inverse(&psi)
-        return Waves.unchecked(field: psi, grid: grid, beam: beam, normalization: .reciprocalSpace, tilt: tilt)
+        return try ProbeBuilder(self).build(at: position)
     }
 
     /// Ψ₀ = aperture · exp(−iχ) / ‖·‖ in reciprocal space, unshifted: `build(at:)`

@@ -2,10 +2,9 @@
 //  PreparedBatch.swift
 //  Role: what a batch of waves reuses: the potential made ready once (transmission functions or GPU slices), the CPU
 //        workers' FFT plans and the propagators, so a scan run in chunks of positions prepares once (#61). The tests
-//        count the preparations through a task-local counter.
+//        count the preparations through `WorkCounter` (SimulatoCore).
 //
 
-import Synchronization
 import SimulatoCore
 
 /// A potential made ready once for many batches of one energy (and, on `.metal`, one tilt). Made by
@@ -43,7 +42,7 @@ package final class CPUWorkspace: @unchecked Sendable {
     func reservePlans(_ count: Int) throws {
         while plans.count < count {
             plans.append(try FFT2D(nx: grid.nx, ny: grid.ny))
-            Multislice.workCounter?.fftPlans.withLock { $0 += 1 }
+            WorkCounter.current?.countFFTPlan()
         }
     }
 
@@ -65,23 +64,4 @@ package final class CPUWorkspace: @unchecked Sendable {
         }
         return out
     }
-}
-
-extension Multislice {
-    /// For the tests: counts of the expensive steps of the runs made while it is bound (`$workCounter.withValue`).
-    package final class WorkCounter: Sendable {
-        /// Potentials made ready for propagation: transmission functions built (CPU) or a potential prepared on the GPU.
-        package let preparations = Mutex(0)
-        /// FFT plans made for CPU batch workers.
-        package let fftPlans = Mutex(0)
-
-        package init() {}
-
-        package var preparationCount: Int { preparations.withLock { $0 } }
-        /// Counts one preparation (callers need not import Synchronization).
-        func countPreparation() { preparations.withLock { $0 += 1 } }
-        package var fftPlanCount: Int { fftPlans.withLock { $0 } }
-    }
-
-    @TaskLocal package static var workCounter: WorkCounter?
 }
