@@ -126,14 +126,15 @@ public enum STEM {
         }
     }
 
-    /// A custom `ScanPattern` must have one or two axes whose product is its number of positions.
+    /// A custom `ScanPattern` must have one or two axes, none negative, whose product is its number of positions (two negative
+    /// axes multiply to a positive count, and the measurement at the end of the scan would trap on them, #128).
     static func checkShape(_ scan: some ScanPattern) throws {
         let shape = scan.shape
         let (product, overflow) = shape.reduce((1, false)) { acc, n in
             let r = acc.0.multipliedReportingOverflow(by: n)
             return (r.partialValue, acc.1 || r.overflow)
         }
-        guard (1...2).contains(shape.count), !overflow, product == scan.positions.count else {
+        guard (1...2).contains(shape.count), shape.allSatisfy({ $0 >= 0 }), !overflow, product == scan.positions.count else {
             throw SimulatoError.invalidScan("the scan shape \(shape) must have one or two axes whose product is the \(scan.positions.count) positions")
         }
     }

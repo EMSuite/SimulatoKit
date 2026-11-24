@@ -39,7 +39,10 @@ public struct OrthogonalUnit: Sendable, Hashable {
     public let orientation: simd_double3x3
 
     /// The largest of |scale − 1| and |shear| (0.001 is 0.1 %).
-    public var strain: Double {
+    public var strain: Double { Self.strain(scale: scale, shear: shear) }
+
+    /// The largest of |scale − 1| and |shear| of a transform's decomposition.
+    static func strain(scale: SIMD3<Double>, shear: SIMD3<Double>) -> Double {
         var worst = 0.0
         for a in 0..<3 {
             let stretch: Double = abs(abs(scale[a]) - 1)
@@ -139,19 +142,27 @@ public enum SlabBuilder {
     /// The orthogonal unit with the fewest repetitions of ``repetitionLadder`` whose strain is at most `maximumStrain`.
     /// - Throws: `SimulatoError.strainTooLarge` with the least strain found (and its repetitions) when no rung holds it;
     ///   `invalidStrain` for a limit that is not finite and non-negative; the refusals of
-    ///   ``orthogonalUnit(of:zoneAxis:maximumRepetitions:)``.
+    ///   ``orthogonalUnit(of:zoneAxis:maximumRepetitions:)`` (at a rung whose strain is not taken, only the cell's); `CancellationError`
+    ///   when the task is cancelled, checked before each rung. Atoms are cut only for the rung taken.
     public static func orthogonalUnit(of cell: CrystalCell, zoneAxis: SIMD3<Int>,
                                       maximumStrain: Double = defaultMaximumStrain) throws -> OrthogonalUnit {
         guard maximumStrain.isFinite, maximumStrain >= 0 else { throw SimulatoError.invalidStrain(maximumStrain) }
         try checkOccupancy(cell)
-        let rotation = try zoneRotation(cell, zoneAxis: zoneAxis)
-        var best: OrthogonalUnit?
+        return try ladder(cell, rotation: try zoneRotation(cell, zoneAxis: zoneAxis), maximumStrain: maximumStrain)
+    }
+
+    /// The unit with the fewest repetitions of ``repetitionLadder`` whose strain is at most `maximumStrain`. The strain of a rung
+    /// comes from V and the box alone, so atoms are cut only for the rung that is taken (#130).
+    /// - Throws: `SimulatoError.strainTooLarge` with the least strain found and its repetitions; `CancellationError` before a rung.
+    static func ladder(_ cell: CrystalCell, rotation: [SIMD3<Double>], maximumStrain: Double) throws -> OrthogonalUnit {
+        var best: UnitPlan?
         for n in repetitionLadder {
-            let u = try unit(cell, rotation: rotation, repetitions: n)
-            if u.strain <= maximumStrain { return u }
-            if best == nil || u.strain < best!.strain { best = u }
+            try Task.checkCancellation()
+            let plan = try unitPlan(cell, rotation: rotation, repetitions: n)
+            if plan.strain <= maximumStrain { return try cut(cell, plan) }
+            if best == nil || plan.strain < best!.strain { best = plan }
         }
-        throw SimulatoError.strainTooLarge(strain: best!.strain, maximum: maximumStrain, repetitions: best!.maximumRepetitions)
+        throw SimulatoError.strainTooLarge(strain: best!.strain, maximum: maximumStrain, repetitions: best!.repetitions)
     }
 
     /// A slab: the orthogonal unit (``orthogonalUnit(of:zoneAxis:maximumStrain:)``) repeated to at least `lateralSize` in x
@@ -159,7 +170,8 @@ public enum SlabBuilder {
     /// slices per period of at most `sliceThickness`, with the atoms shifted along z so no atomic plane sits on a slice
     /// boundary.
     /// - Throws: `SimulatoError.invalidBox` for a lateral size or thickness that is not finite and positive;
-    ///   `invalidSliceThickness`; `tooManyAtoms` above `maximumAtomCount`; the refusals of the unit.
+    ///   `invalidSliceThickness`; `tooManyAtoms` above `maximumAtomCount`; the refusals of the unit, `CancellationError`
+    ///   among them.
     public static func slab(of cell: CrystalCell, zoneAxis: SIMD3<Int>, lateralSize: SIMD2<Double>? = nil,
                             thickness: Double, sliceThickness: Double = 1,
                             maximumStrain: Double = defaultMaximumStrain,
@@ -170,6 +182,14 @@ public enum SlabBuilder {
         }
         guard sliceThickness.isFinite, sliceThickness > 0 else { throw SimulatoError.invalidSliceThickness(sliceThickness) }
         let unit = try orthogonalUnit(of: cell, zoneAxis: zoneAxis, maximumStrain: maximumStrain)
+        return try slab(of: unit, lateral: lateral, thickness: thickness, sliceThickness: sliceThickness, maximumAtomCount: maximumAtomCount)
+    }
+
+    /// The slab of `unit` (inputs already checked): repeated to at least `lateral` in x and y, to the whole number of periods
+    /// nearest `thickness`, cut and shifted as ``slab(of:zoneAxis:lateralSize:thickness:sliceThickness:maximumStrain:maximumAtomCount:)``
+    /// says.
+    static func slab(of unit: OrthogonalUnit, lateral: SIMD2<Double>, thickness: Double, sliceThickness: Double,
+                     maximumAtomCount: Int) throws -> Slab {
         let box = unit.structure.box
         func count(_ want: Double, _ side: Double) -> Double { max(1, (want / side - 1e-9).rounded(.up)) }
         let n = SIMD3(count(lateral.x, box.x), count(lateral.y, box.y),
@@ -300,6 +320,24 @@ public enum SlabBuilder {
 
     /// The orthogonal unit of the turned cell at `repetitions`.
     static func unit(_ cell: CrystalCell, rotation: [SIMD3<Double>], repetitions: Int) throws -> OrthogonalUnit {
+        try cut(cell, unitPlan(cell, rotation: rotation, repetitions: repetitions))
+    }
+
+    /// Steps 2 and 4 at one rung, before any atom is cut: the box, V, the affine transform and the strain it carries.
+    struct UnitPlan {
+        let rotation: [SIMD3<Double>]
+        let repetitions: Int
+        let box: SIMD3<Double>
+        let v: [SIMD3<Double>]
+        let vInverse: [SIMD3<Double>]
+        let cells: Double
+        let scale: SIMD3<Double>
+        let shear: SIMD3<Double>
+        var strain: Double { OrthogonalUnit.strain(scale: scale, shear: shear) }
+    }
+
+    /// The box, V and the transform of the turned cell at `repetitions`.
+    static func unitPlan(_ cell: CrystalCell, rotation: [SIMD3<Double>], repetitions: Int) throws -> UnitPlan {
         let rt = Lattice.transpose(rotation)
         // abTEM: the turned cell with every |component| below 1e-6 set to zero.
         let turned = cell.rows.map { v -> SIMD3<Double> in
@@ -331,6 +369,14 @@ public enum SlabBuilder {
         }
         let identity: [SIMD3<Double>] = [SIMD3(1, 0, 0), SIMD3(0, 1, 0), SIMD3(0, 0, 1)]
         let affine: [SIMD3<Double>] = unchanged ? identity : Lattice.matmul(newInverse, d)
+        let (scale, shear) = decompose(affine)
+        return UnitPlan(rotation: rotation, repetitions: repetitions, box: box, v: v, vInverse: vInverse, cells: cells,
+                        scale: scale, shear: shear)
+    }
+
+    /// Step 3 at a planned rung: the new cell's atoms.
+    static func cut(_ cell: CrystalCell, _ plan: UnitPlan) throws -> OrthogonalUnit {
+        let v = plan.v, vInverse = plan.vInverse, box = plan.box, cells = plan.cells, repetitions = plan.repetitions
 
         // The atoms of the new cell: every site in every cell translation that covers it, kept when its fractional
         // coordinates in the new cell lie in [0, 1) (within 1e-9 of an integer counts as that integer).
@@ -374,12 +420,12 @@ public enum SlabBuilder {
         guard atoms.count == expected else {
             throw SimulatoError.invalidCell("the cut kept \(atoms.count) of \(expected) atoms")
         }
-        let (scale, shear) = decompose(affine)
         // The columns are the rows of R: the box's axes written in the crystal's frame.
-        let orientation = simd_double3x3(columns: (rotation[0], rotation[1], rotation[2]))
+        let r = plan.rotation
+        let orientation = simd_double3x3(columns: (r[0], r[1], r[2]))
         return OrthogonalUnit(structure: try AtomicStructure(box: box, atoms: atoms),
                               supercell: v.map { SIMD3(Int($0.x), Int($0.y), Int($0.z)) },
-                              maximumRepetitions: repetitions, scale: scale, shear: shear, orientation: orientation)
+                              maximumRepetitions: repetitions, scale: plan.scale, shear: plan.shear, orientation: orientation)
     }
 
     /// A fractional position wrapped into [0, 1) (within 1e−9 of 1 counts as 0).
@@ -413,6 +459,8 @@ public enum SlabBuilder {
     /// The z shift of j h / 720 (j = 0 ... 719) that keeps the planes farthest from a slice boundary (distances rounded to
     /// 1e−9 Å, the smallest j on a tie).
     static func zShift(_ z: [Double], sliceHeight h: Double) -> Double {
+        // The margin is a minimum over z, so each distinct plane counts once: a unit of thousands of atoms has a few planes (#130).
+        let z = Array(Set(z)).sorted()
         var bestJ = 0, bestF = -1.0
         for j in 0..<shiftSteps {
             let delta = Double(j) * h / Double(shiftSteps)
