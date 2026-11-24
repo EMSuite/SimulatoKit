@@ -1,7 +1,8 @@
 """SimulatoKit specimens from atom models: the pin generator (MK13).
 
 Models built with ASE: Al with a vacancy, a Sigma5 (310) [001] tilt bicrystal in Al, and an orthorhombic cell whose beam
-runs along a, b and c (abTEM's `orthogonalize_cell(plane=...)`); and ASE's `Atoms.center(vacuum=)` on a cell-less model.
+runs along a, b and c (abTEM's `orthogonalize_cell(plane=...)`); and ASE's `Atoms.center(vacuum=)`: on a model with no cell (`all`) and on one that starts from a
+6 x 7 x 8 A cell, padded on two axes (`axis_xy`) and on z only (`z_only`).
 abTEM 1.0.10 (float64, numpy FFT, eager) gives the orthogonalised atoms and the plane-wave exit wave of each model; the
 exit wave is re-derived in NumPy (text_wrap_and_slice, text_potential_slice, text_multislice) and asserted equal to abTEM's
 at 1e-10 of the maximum. The padding cases are pure ASE and are written as cell and positions. Writes
@@ -110,7 +111,8 @@ def vacancy():
 
 
 def sigma5():
-    """A symmetric (310) [001] tilt bicrystal: grain A has [3 1 0] along y, grain B [3 -1 0] along y (both repeat every
+    """A (310) [001] tilt bicrystal, a test specimen and not one ideal boundary (the grains' thickness along x is not a
+    multiple of the rotated lattice's period, so the box holds two boundaries with an arbitrary rigid shift): grain A has [3 1 0] along y, grain B [3 -1 0] along y (both repeat every
     sqrt(10) a along y), A fills the left half of the box and B the right half; atoms of the two grains closer than
     1.8 A across either boundary lose the B atom."""
     period = np.sqrt(10.0) * A0
@@ -176,7 +178,8 @@ def main():
     for name, kwargs in (("all", {"vacuum": 3.0}), ("axis_xy", {"vacuum": 2.5, "axis": (0, 1)}),
                          ("z_only", {"vacuum": 4.0, "axis": 2})):
         atoms = molecule("CH3CH2OH")
-        atoms.set_cell(np.diag([6.0, 7.0, 8.0])) if name != "all" else None
+        if name != "all":
+            atoms.set_cell(np.diag([6.0, 7.0, 8.0]))
         atoms.center(**kwargs)
         pad[name] = {"cell": np.array(atoms.cell).tolist(), "numbers": [int(z) for z in atoms.numbers],
                      "positions": atoms.positions.tolist(), "arguments": {k: (list(x) if isinstance(x, tuple) else x)
