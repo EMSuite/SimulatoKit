@@ -138,8 +138,8 @@ Test a detector without running a simulation by constructing the intensity direc
 ```swift
 let grid = try Grid(nx: 64, ny: 64, extentX: 10, extentY: 10)
 let beam = try ElectronBeam(energy: 300e3)
-let flat = DiffractionIntensity(grid: grid, beam: beam,
-                                values: [Double](repeating: 1, count: grid.count))
+let flat = try DiffractionIntensity(grid: grid, beam: beam,
+                                    values: [Double](repeating: 1, count: grid.count))
 let value = try OffsetDisc(centre: .zero, radius: 10).detect(flat)
 ```
 

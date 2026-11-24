@@ -15,7 +15,7 @@ struct PolarMeasurementTests {
     /// The planted scan and the detector whose bins it fills: inner 5, outer 25 mrad, 2 x 4 bins.
     static func planted() throws -> (ScanMeasurement, SegmentedDetector) {
         let values = (0..<(2 * 3 * 2 * 4)).map { pow(Double($0), 1.5) }
-        let m = ScanMeasurement(scanShape: [2, 3], valueShape: [2, 4], values: values)
+        let m = ScanMeasurement.unchecked(scanShape: [2, 3], valueShape: [2, 4], values: values)
         return (m, try SegmentedDetector(radialBins: 2, azimuthalBins: 4, inner: 5, outer: 25))
     }
 
@@ -38,7 +38,7 @@ struct PolarMeasurementTests {
                            [10.392304845413264, 72.9657453878188, 165.6381598545456, 280.5922308261581,
                             414.1255848169731, 563.9397130899721], rtol: 1e-7))
         // A line scan keeps its one scan axis.
-        let line = ScanMeasurement(scanShape: [6], valueShape: [2, 4], values: m.values)
+        let line = ScanMeasurement.unchecked(scanShape: [6], valueShape: [2, 4], values: m.values)
         #expect(try line.integrate(detectorRegions: [1, 6]).scanShape == [6])
         #expect(try line.integrate(detectorRegions: [1, 6]).values == (try m.integrate(detectorRegions: [1, 6])).values)
     }
@@ -76,7 +76,7 @@ struct PolarMeasurementTests {
 
     @Test func aSymmetricPatternHasNoDifferential() throws {
         // Four quadrants of equal intensity at every position: both directions are 0.
-        let m = ScanMeasurement(scanShape: [3], valueShape: [1, 4], values: [Double](repeating: 2.5, count: 12))
+        let m = ScanMeasurement.unchecked(scanShape: [3], valueShape: [1, 4], values: [Double](repeating: 2.5, count: 12))
         let d = try m.differentials(direction1: ([0], [2]), direction2: ([1], [3]))
         #expect(d.direction1.values == [0, 0, 0] && d.direction2.values == [0, 0, 0])
         #expect(d.direction1.scanShape == [3])
@@ -94,7 +94,7 @@ struct PolarMeasurementTests {
         let other = try SegmentedDetector(radialBins: 1, azimuthalBins: 4, inner: 5, outer: 25)
         #expect(throws: SimulatoError.self) { try m.integrate(detector: other) }
         // A one-value measurement has no bins.
-        let annular = ScanMeasurement(scanShape: [2], valueShape: [], values: [1, 2])
+        let annular = ScanMeasurement.unchecked(scanShape: [2], valueShape: [], values: [1, 2])
         #expect(throws: SimulatoError.self) { try annular.integrate(detectorRegions: [0]) }
         #expect(throws: SimulatoError.self) { try annular.differentials(direction1: ([0], [0]), direction2: ([0], [0])) }
     }

@@ -30,7 +30,7 @@ struct IntegratedCenterOfMassTests {
             }
         }
         // a centre-of-mass scan holds (x, y) per position, rows by columns
-        let scan = ScanMeasurement(scanShape: [nx, ny], valueShape: [2], values: zip(gx, gy).flatMap { [$0, $1] })
+        let scan = ScanMeasurement.unchecked(scanShape: [nx, ny], valueShape: [2], values: zip(gx, gy).flatMap { [$0, $1] })
         let images = try scan.gradientImages(samplingX: sx, samplingY: sy)
         #expect(images.x.values == gx && images.y.values == gy && images.x.nx == nx && images.x.ny == ny)
         let icom = try scan.integratedCenterOfMass(samplingX: sx, samplingY: sy)

@@ -50,7 +50,7 @@ enum Pins {
 
     static func complex(_ name: String) -> ComplexField {
         let d = doubles(name), s = shape(name)
-        return ComplexField(nx: s[0], ny: s[1], real: stride(from: 0, to: d.count, by: 2).map { d[$0] },
+        return ComplexField.unchecked(nx: s[0], ny: s[1], real: stride(from: 0, to: d.count, by: 2).map { d[$0] },
                             imaginary: stride(from: 1, to: d.count, by: 2).map { d[$0] })
     }
 

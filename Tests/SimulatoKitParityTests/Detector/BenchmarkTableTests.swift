@@ -39,7 +39,7 @@ struct BenchmarkTableTests {
             .init(atomicNumber: 13, position: SIMD3(2.025, 0, 2.025)), .init(atomicNumber: 13, position: SIMD3(2.025, 2.025, 0)),
         ])
         let cells = max(1, Int((Double(n) * 0.1 / 4.05).rounded()))
-        return cell.repeated(cells, cells, 5)
+        return try cell.repeated(cells, cells, 5)
     }
 
     @Test(arguments: benchSizes)
@@ -53,7 +53,7 @@ struct BenchmarkTableTests {
         // FFT: forward + inverse of one complex field (vDSP lengths for n; Bluestein for n - 6).
         for m in [n, n - 6] {
             let fft = try FFT2D(nx: m, ny: m)
-            var f = ComplexField(nx: m, ny: m, real: (0..<m * m).map { sin(Double($0)) }, imaginary: [Double](repeating: 0, count: m * m))
+            var f = ComplexField.unchecked(nx: m, ny: m, real: (0..<m * m).map { sin(Double($0)) }, imaginary: [Double](repeating: 0, count: m * m))
             try Self.report("fft2+ifft2", m, "cpu") {
                 fft.forward(&f)
                 fft.inverse(&f)

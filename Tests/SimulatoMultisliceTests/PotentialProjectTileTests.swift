@@ -21,7 +21,7 @@ struct PotentialProjectTileTests {
         let slices = [1.0, 1.5, 0.5].enumerated().map { s, dz in
             PotentialSlice(thickness: dz, values: (0..<20).map { pow(Double(s * 20 + $0), 1.3) })
         }
-        return ProjectedPotential(grid: grid, slices: slices)
+        return ProjectedPotential.unchecked(grid: grid, slices: slices)
     }
 
     /// abTEM's checksum: the sum of value · (flat index + 1), slice by slice, row-major.
@@ -66,7 +66,7 @@ struct PotentialProjectTileTests {
 
     @Test func tilingOnceIsTheIdentity() throws {
         let original = try Self.planted()
-        #expect(try original.tiled(repetitionsX: 1, repetitionsY: 1) == ProjectedPotential(grid: original.grid,
+        #expect(try original.tiled(repetitionsX: 1, repetitionsY: 1) == ProjectedPotential.unchecked(grid: original.grid,
                                                                                              slices: original.slices))
     }
 
@@ -89,7 +89,7 @@ struct PotentialProjectTileTests {
             #expect(throws: ImageOperationError.self) { try p.tiled(repetitionsX: x, repetitionsY: y, repetitionsZ: z) }
         }
         // A potential without slices is refused the same way before any grid is built.
-        let empty = ProjectedPotential(grid: p.grid, slices: [])
+        let empty = ProjectedPotential.unchecked(grid: p.grid, slices: [])
         #expect(throws: ImageOperationError.self) { try empty.tiled(repetitionsX: Int.max / 2, repetitionsY: 1) }
         #expect(try empty.tiled(repetitionsX: 2, repetitionsY: 2, repetitionsZ: 3).slices.isEmpty)
     }

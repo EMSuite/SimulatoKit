@@ -105,7 +105,7 @@ public struct Probe: Sendable, Hashable {
             psi.imaginary[i] /= f
         }
         try FFT2D(nx: grid.nx, ny: grid.ny).inverse(&psi)
-        return Waves(field: psi, grid: grid, beam: beam, normalization: .reciprocalSpace, tilt: tilt)
+        return Waves.unchecked(field: psi, grid: grid, beam: beam, normalization: .reciprocalSpace, tilt: tilt)
     }
 
     /// Ψ₀ = aperture · exp(−iχ) / ‖·‖ in reciprocal space, unshifted: `build(at:)`

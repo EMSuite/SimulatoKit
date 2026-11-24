@@ -35,7 +35,7 @@ extension ScanMeasurement {
                         sigma: sigmaY / samplingY)
         Self.filterAxis(&data, length: nx, stride: ny * v, outer: 1, outerStride: 0, inner: ny * v,
                         sigma: sigmaX / samplingX)
-        return ScanMeasurement(scanShape: scanShape, valueShape: valueShape, values: data)
+        return ScanMeasurement.unchecked(scanShape: scanShape, valueShape: valueShape, values: data)
     }
 
     /// The same with one σ for both axes.
@@ -89,7 +89,7 @@ extension ScanMeasurement {
         }
         let means = try poissonMeans(dose: dose)
         var rng = GaussianGenerator(seed: seed)
-        return ScanMeasurement(scanShape: scanShape, valueShape: valueShape,
+        return ScanMeasurement.unchecked(scanShape: scanShape, valueShape: valueShape,
                                values: means.map { Double(PoissonSampler.draw(mean: $0, &rng)) })
     }
 
@@ -139,7 +139,7 @@ extension ScanMeasurement {
         let means = try poissonMeans(dose: dose)
         var rng = GaussianGenerator(seed: seed)
         return (0..<samples).map { _ in
-            ScanMeasurement(scanShape: scanShape, valueShape: valueShape,
+            ScanMeasurement.unchecked(scanShape: scanShape, valueShape: valueShape,
                             values: means.map { Double(PoissonSampler.draw(mean: $0, &rng)) })
         }
     }

@@ -28,7 +28,7 @@ struct BenchmarkTests {
             .init(atomicNumber: 13, position: SIMD3(0, 0, 0)), .init(atomicNumber: 13, position: SIMD3(0, 2.025, 2.025)),
             .init(atomicNumber: 13, position: SIMD3(2.025, 0, 2.025)), .init(atomicNumber: 13, position: SIMD3(2.025, 2.025, 0)),
         ])
-        let structure = cell.repeated(cells, cells, 50)
+        let structure = try cell.repeated(cells, cells, 50)
         let beam = try ElectronBeam(energy: 300e3)
         let clock = ContinuousClock()
         // The plane wave, structure to exit wave.

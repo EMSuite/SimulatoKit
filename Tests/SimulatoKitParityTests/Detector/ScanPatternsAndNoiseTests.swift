@@ -142,7 +142,7 @@ struct ScanPatternsAndNoiseTests {
     @Test func poissonNoiseHasThePoissonMeanAndVariance() throws {
         let n = 20000
         for mean in [0.5, 4.0, 9.9, 10.0, 37.0, 800.0] {
-            let m = ScanMeasurement(scanShape: [n, 1], valueShape: [], values: [Double](repeating: mean / 3.0, count: n))
+            let m = ScanMeasurement.unchecked(scanShape: [n, 1], valueShape: [], values: [Double](repeating: mean / 3.0, count: n))
             let noisy = try m.poissonNoise(dose: 3.0, seed: 11)
             let mu = noisy.values.reduce(0, +) / Double(n)
             let variance = noisy.values.reduce(0) { $0 + ($1 - mu) * ($1 - mu) } / Double(n - 1)
@@ -155,7 +155,7 @@ struct ScanPatternsAndNoiseTests {
     }
 
     @Test func poissonNoiseIsSeededClippedAndRefusesBadDoses() throws {
-        let m = ScanMeasurement(scanShape: [2, 2], valueShape: [], values: [1, -3, 0, 5])
+        let m = ScanMeasurement.unchecked(scanShape: [2, 2], valueShape: [], values: [1, -3, 0, 5])
         let a = try m.poissonNoise(dose: 2, seed: 7), b = try m.poissonNoise(dose: 2, seed: 7)
         let other = try m.poissonNoise(dose: 2, seed: 8)
         #expect(a.values == b.values)

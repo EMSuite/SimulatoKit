@@ -27,7 +27,7 @@ struct ImageOperationsTests {
                 }
             }
         }
-        func field(_ v: [Double]) -> RealField { RealField(nx: nx, ny: ny, values: v, samplingX: sx, samplingY: sy) }
+        func field(_ v: [Double]) -> RealField { RealField.unchecked(nx: nx, ny: ny, values: v, samplingX: sx, samplingY: sy) }
         return (field(t), field(gx), field(gy))
     }
 
@@ -46,23 +46,23 @@ struct ImageOperationsTests {
 
     @Test func aConstantGradientCarriesNoPeriodicPart() throws {
         // a uniform gradient has only the zero frequency, which abTEM sets to 0: the integral is flat
-        let g = RealField(nx: 8, ny: 6, values: [Double](repeating: 2.5, count: 48), samplingX: 1, samplingY: 1)
+        let g = RealField.unchecked(nx: 8, ny: 6, values: [Double](repeating: 2.5, count: 48), samplingX: 1, samplingY: 1)
         let t = try RealField.integratingGradient(x: g, y: g)
         #expect(t.values.allSatisfy { abs($0) < 1e-12 })
     }
 
     @Test func complexGradientIsTheSameAsTwoComponents() throws {
         let p = Self.planted(nx: 15, ny: 11, sx: 0.4, sy: 0.4)
-        let c = ComplexField(nx: 15, ny: 11, real: p.gx.values, imaginary: p.gy.values)
+        let c = ComplexField.unchecked(nx: 15, ny: 11, real: p.gx.values, imaginary: p.gy.values)
         #expect(try c.integratedGradient(samplingX: 0.4, samplingY: 0.4) == RealField.integratingGradient(x: p.gx, y: p.gy))
     }
 
     @Test func gradientRefusals() throws {
-        let a = RealField(nx: 4, ny: 4, values: [Double](repeating: 0, count: 16), samplingX: 1, samplingY: 1)
-        let b = RealField(nx: 4, ny: 3, values: [Double](repeating: 0, count: 12), samplingX: 1, samplingY: 1)
-        let c = RealField(nx: 4, ny: 4, values: [Double](repeating: 0, count: 16), samplingX: 2, samplingY: 1)
-        let d = RealField(nx: 1, ny: 4, values: [Double](repeating: 0, count: 4), samplingX: 1, samplingY: 1)
-        let e = RealField(nx: 4, ny: 4, values: [Double](repeating: 0, count: 16), samplingX: 0, samplingY: 0)
+        let a = RealField.unchecked(nx: 4, ny: 4, values: [Double](repeating: 0, count: 16), samplingX: 1, samplingY: 1)
+        let b = RealField.unchecked(nx: 4, ny: 3, values: [Double](repeating: 0, count: 12), samplingX: 1, samplingY: 1)
+        let c = RealField.unchecked(nx: 4, ny: 4, values: [Double](repeating: 0, count: 16), samplingX: 2, samplingY: 1)
+        let d = RealField.unchecked(nx: 1, ny: 4, values: [Double](repeating: 0, count: 4), samplingX: 1, samplingY: 1)
+        let e = RealField.unchecked(nx: 4, ny: 4, values: [Double](repeating: 0, count: 16), samplingX: 0, samplingY: 0)
         #expect(throws: ImageOperationError.gradientComponentsDiffer) { _ = try RealField.integratingGradient(x: a, y: b) }
         #expect(throws: ImageOperationError.gradientComponentsDiffer) { _ = try RealField.integratingGradient(x: a, y: c) }
         #expect(throws: SimulatoError.unsupportedGridLength(1)) { _ = try RealField.integratingGradient(x: d, y: d) }
@@ -75,7 +75,7 @@ struct ImageOperationsTests {
     }
 
     @Test func tilingRepeatsTheImage() throws {
-        let f = RealField(nx: 2, ny: 3, values: [1, 2, 3, 4, 5, 6], samplingX: 0.5, samplingY: 0.25)
+        let f = RealField.unchecked(nx: 2, ny: 3, values: [1, 2, 3, 4, 5, 6], samplingX: 0.5, samplingY: 0.25)
         let t = try f.tiled(repetitionsX: 2, repetitionsY: 2)
         #expect(t.nx == 4 && t.ny == 6 && t.samplingX == 0.5 && t.samplingY == 0.25)
         #expect(t.values == [1, 2, 3, 1, 2, 3, 4, 5, 6, 4, 5, 6, 1, 2, 3, 1, 2, 3, 4, 5, 6, 4, 5, 6])
@@ -83,10 +83,10 @@ struct ImageOperationsTests {
     }
 
     @Test func discOfAConstantImage() throws {
-        let f = RealField(nx: 20, ny: 16, values: [Double](repeating: 3, count: 320), samplingX: 0.2, samplingY: 0.25)
+        let f = RealField.unchecked(nx: 20, ny: 16, values: [Double](repeating: 3, count: 320), samplingX: 0.2, samplingY: 0.25)
         #expect(abs(try f.integrateDisc(x: 2, y: 2, radius: 0.7, mean: true) - 3) < 1e-12)
         // periodic: the same disc moved by one extent along either axis gives the same sum
-        let r = RealField(nx: 20, ny: 16, values: (0..<320).map { sin(Double($0)) }, samplingX: 0.2, samplingY: 0.25)
+        let r = RealField.unchecked(nx: 20, ny: 16, values: (0..<320).map { sin(Double($0)) }, samplingX: 0.2, samplingY: 0.25)
         let a = try r.integrateDisc(x: 0.1, y: 0.2, radius: 0.5)
         let b = try r.integrateDisc(x: 0.1 + 4.0, y: 0.2 - 4.0, radius: 0.5)
         #expect(abs(a - b) < 1e-12)

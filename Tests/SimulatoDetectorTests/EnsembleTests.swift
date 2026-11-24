@@ -15,11 +15,11 @@ import SimulatoProbe
 struct EnsembleTests {
     /// A 2 x 3 scan of one value per position.
     static func measurement() -> ScanMeasurement {
-        ScanMeasurement(scanShape: [2, 3], valueShape: [], values: [0.5, 1, 2, 4, 8, 0])
+        ScanMeasurement.unchecked(scanShape: [2, 3], valueShape: [], values: [0.5, 1, 2, 4, 8, 0])
     }
 
     @Test func poissonSamplesAreIndependentDrawsOfTheSameMean() throws {
-        let flat = ScanMeasurement(scanShape: [20, 25], valueShape: [], values: [Double](repeating: 1, count: 500))
+        let flat = ScanMeasurement.unchecked(scanShape: [20, 25], valueShape: [], values: [Double](repeating: 1, count: 500))
         let samples = try flat.poissonNoise(dose: 4, samples: 40, seed: 3)
         #expect(samples.count == 40)
         for s in samples { #expect(s.scanShape == [20, 25] && s.valueShape == [] && s.values.count == 500) }

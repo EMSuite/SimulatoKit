@@ -16,11 +16,35 @@ public struct ScanMeasurement: Sendable {
     public let valueShape: [Int]
     public let values: [Double]
 
-    /// - Precondition: `scanShape` has one axis (a `LineScan`) or two (a `GridScan`), and `values` holds the product of
-    ///   `scanShape` × the product of `valueShape` numbers.
-    public init(scanShape: [Int], valueShape: [Int], values: [Double]) {
-        precondition((1...2).contains(scanShape.count) && values.count == scanShape.reduce(1, *) * valueShape.reduce(1, *),
-                     "ScanMeasurement: the values do not fill the shapes")
+    /// - Throws: `SimulatoError.invalidShape` unless `scanShape` has one axis (a `LineScan`) or two (a `GridScan`), every
+    ///   axis is non-negative, and `values` holds the product of `scanShape` × the product of `valueShape` numbers.
+    public init(scanShape: [Int], valueShape: [Int], values: [Double]) throws {
+        guard Self.fills(scanShape, valueShape, values.count) else {
+            throw SimulatoError.invalidShape("scan shape \(scanShape) (one or two axes) × value shape \(valueShape) for \(values.count) values")
+        }
+        self.init(storing: scanShape, valueShape, values)
+    }
+
+    /// The kit's own construction, from arrays it sized: a mismatch is a bug of the kit and traps.
+    package static func unchecked(scanShape: [Int], valueShape: [Int], values: [Double]) -> ScanMeasurement {
+        precondition(fills(scanShape, valueShape, values.count), "ScanMeasurement: the values do not fill the shapes")
+        return ScanMeasurement(storing: scanShape, valueShape, values)
+    }
+
+    /// Whether `count` values fill one or two scan axes × the value shape (false on a negative axis or an overflow).
+    static func fills(_ scanShape: [Int], _ valueShape: [Int], _ count: Int) -> Bool {
+        guard (1...2).contains(scanShape.count) else { return false }
+        var product = 1
+        for n in scanShape + valueShape {
+            guard n >= 0 else { return false }
+            let (r, overflow) = product.multipliedReportingOverflow(by: n)
+            if overflow { return false }
+            product = r
+        }
+        return product == count
+    }
+
+    private init(storing scanShape: [Int], _ valueShape: [Int], _ values: [Double]) {
         self.scanShape = scanShape
         self.valueShape = valueShape
         self.values = values
@@ -38,7 +62,7 @@ public struct ScanMeasurement: Sendable {
     /// The image of a one-number detector (annular), sampled as the scan.
     public func image(samplingX: Double, samplingY: Double) -> RealField? {
         guard valueCount == 1, scanShape.count == 2 else { return nil }
-        return RealField(nx: scanShape[0], ny: scanShape[1], values: values, samplingX: samplingX, samplingY: samplingY)
+        return RealField.unchecked(nx: scanShape[0], ny: scanShape[1], values: values, samplingX: samplingX, samplingY: samplingY)
     }
 }
 

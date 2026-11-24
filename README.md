@@ -211,6 +211,9 @@ Numbers are held to the Python reference within its own tolerance; `docs/parity.
   detectors sum in float64 where abTEM sums in float32 (agreement about 2e−7).
 - A `ProjectedPotential` on `.metal` uploads every slice; prefer `Potential` for large Metal runs. `AtomicStructure` and the
   example's CIF reader are deliberately minimal: the kit stays standalone.
+- Values handed to the kit are checked: an initialiser whose arrays do not fill its shape throws `invalidShape`, and the
+  arrays of `ComplexField`, `RealField` and `Waves.field` are read-only outside the kit, so their sizes always match the
+  grid. Subscripts keep `Array`'s contract: an index out of range traps.
 
 ## Running the example
 

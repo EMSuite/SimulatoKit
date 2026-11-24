@@ -34,7 +34,7 @@ extension RealField {
         guard !o1, !o2, bytes <= limit else {
             throw SimulatoError.gridTooLarge(rows: rows, columns: columns, required: o1 || o2 ? .max : bytes, limit: limit)
         }
-        var f = ComplexField(nx: nx, ny: ny, real: values, imaginary: [Double](repeating: 0, count: nx * ny))
+        var f = ComplexField.unchecked(nx: nx, ny: ny, real: values, imaginary: [Double](repeating: 0, count: nx * ny))
         try FFT2D(nx: nx, ny: ny).forward(&f)
         let mapX = Waves.resampleMap(from: nx, to: rows), mapY = Waves.resampleMap(from: ny, to: columns)
         var out = ComplexField(nx: rows, ny: columns)
@@ -50,7 +50,7 @@ extension RealField {
             let scale = Double(points) / Double(nx * ny)
             for i in result.indices { result[i] *= scale }
         }
-        return RealField(nx: rows, ny: columns, values: result, samplingX: samplingX * Double(nx) / Double(rows),
+        return RealField.unchecked(nx: rows, ny: columns, values: result, samplingX: samplingX * Double(nx) / Double(rows),
                          samplingY: samplingY * Double(ny) / Double(columns))
     }
 

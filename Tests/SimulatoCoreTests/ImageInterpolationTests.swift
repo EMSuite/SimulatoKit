@@ -14,7 +14,7 @@ struct ImageInterpolationTests {
     static let image: RealField = {
         var v = [Double]()
         for i in 0..<5 { for j in 0..<6 { v.append(sin(0.7 * Double(i)) + pow(cos(0.4 * Double(j)), 2) + 0.05 * Double(i * j)) } }
-        return RealField(nx: 5, ny: 6, values: v, samplingX: 0.3, samplingY: 0.25)
+        return RealField.unchecked(nx: 5, ny: 6, values: v, samplingX: 0.3, samplingY: 0.25)
     }()
 
     /// assert_allclose defaults, rtol 1e-7 and atol 0 (abTEM states no tolerance for interpolate or integrate_disc); a
@@ -106,7 +106,7 @@ struct ImageInterpolationTests {
         #expect(throws: SimulatoError.self) { try p.interpolated(rows: 1 << 40, columns: 1 << 40) }
         #expect(throws: SimulatoError.self) { try p.integrateDisc(x: 0.7, y: 0.8, radius: 0.45, interpolate: -1) }
         // A one-pixel axis is refused (abTEM keeps its zero frequency; the kit's FFT starts at 2 points).
-        let line = RealField(nx: 1, ny: 4, values: [1, 2, 3, 4], samplingX: 0.3, samplingY: 0.25)
+        let line = RealField.unchecked(nx: 1, ny: 4, values: [1, 2, 3, 4], samplingX: 0.3, samplingY: 0.25)
         #expect(throws: SimulatoError.self) { try line.interpolated(rows: 2, columns: 8) }
     }
 }

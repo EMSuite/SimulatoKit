@@ -37,10 +37,24 @@ public struct AtomicStructure: Sendable, Hashable {
     }
 
     /// The structure repeated nx × ny × nz times, in ASE's order (x outermost, then y, then z, the atoms innermost).
-    public func repeated(_ nx: Int, _ ny: Int, _ nz: Int) -> AtomicStructure {
-        precondition(nx >= 1 && ny >= 1 && nz >= 1, "repeat counts must be positive")
+    /// - Throws: `invalidShape` for a repeat count below 1, `tooManyAtoms` when the atoms' count overflows an `Int`,
+    ///   `invalidBox` when a side of the repeated box is not finite.
+    public func repeated(_ nx: Int, _ ny: Int, _ nz: Int) throws -> AtomicStructure {
+        guard nx >= 1, ny >= 1, nz >= 1 else {
+            throw SimulatoError.invalidShape("repeat counts must be at least 1, got (\(nx), \(ny), \(nz))")
+        }
+        var total = atoms.count, overflow = false
+        for n in [nx, ny, nz] {
+            let r = total.multipliedReportingOverflow(by: n)
+            total = r.partialValue
+            overflow = overflow || r.overflow
+        }
+        guard !overflow else { throw SimulatoError.tooManyAtoms(count: .max, limit: .max) }
+        let side = box * SIMD3(Double(nx), Double(ny), Double(nz))
+        guard side.x.isFinite, side.y.isFinite, side.z.isFinite else { throw SimulatoError.invalidBox(side.x, side.y, side.z) }
         var out: [Atom] = []
-        out.reserveCapacity(atoms.count * nx * ny * nz)
+        out.reserveCapacity(total)
+        guard !atoms.isEmpty else { return try AtomicStructure(box: side, atoms: []) }
         for mx in 0..<nx {
             for my in 0..<ny {
                 for mz in 0..<nz {
@@ -49,7 +63,6 @@ public struct AtomicStructure: Sendable, Hashable {
                 }
             }
         }
-        // The box sides are finite and positive, and the shifted positions finite: the init cannot throw.
-        return try! AtomicStructure(box: box * SIMD3(Double(nx), Double(ny), Double(nz)), atoms: out)
+        return try AtomicStructure(box: side, atoms: out)
     }
 }

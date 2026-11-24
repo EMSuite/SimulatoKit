@@ -106,6 +106,6 @@ extension RealField {
             }
             out[i] = weight > 0 ? sum / weight : 0
         }
-        return ReciprocalSpaceLineProfiles(count: rings, values: out, sampling: step / (wavelength * 1e3))
+        return try ReciprocalSpaceLineProfiles(count: rings, values: out, sampling: step / (wavelength * 1e3))
     }
 }

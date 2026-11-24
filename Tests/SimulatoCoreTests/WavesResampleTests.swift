@@ -21,7 +21,7 @@ struct WavesResampleTests {
                 f.imaginary[ix * ny + iy] = 0.2 * sin(2 * u - v)
             }
         }
-        return Waves(field: f, grid: grid, beam: try ElectronBeam(energy: 200e3), normalization: .reciprocalSpace)
+        return Waves.unchecked(field: f, grid: grid, beam: try ElectronBeam(energy: 200e3), normalization: .reciprocalSpace)
     }
 
     func maxDiff(_ a: ComplexField, _ b: ComplexField) -> Double {

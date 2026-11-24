@@ -8,8 +8,11 @@
 public struct ComplexField: Sendable, Hashable {
     public let nx: Int
     public let ny: Int
-    public var real: [Double]
-    public var imaginary: [Double]
+    /// The real parts, nx × ny of them. Set by the kit only, so the count always matches the grid (a resized array
+    /// would reach the FFT); build a new field to change them.
+    public package(set) var real: [Double]
+    /// The imaginary parts, nx × ny of them (set by the kit only, as `real`).
+    public package(set) var imaginary: [Double]
 
     /// A field of zeros.
     public init(nx: Int, ny: Int) {
@@ -19,13 +22,31 @@ public struct ComplexField: Sendable, Hashable {
         imaginary = [Double](repeating: 0, count: nx * ny)
     }
 
-    /// - Precondition: both arrays hold nx × ny values.
-    public init(nx: Int, ny: Int, real: [Double], imaginary: [Double]) {
-        precondition(real.count == nx * ny && imaginary.count == nx * ny, "ComplexField: \(nx) x \(ny) values required")
+    /// - Throws: `SimulatoError.invalidShape` unless both arrays hold nx × ny values (nx and ny positive).
+    public init(nx: Int, ny: Int, real: [Double], imaginary: [Double]) throws {
+        guard Self.fills(nx, ny, real.count), imaginary.count == real.count else {
+            throw SimulatoError.invalidShape("a \(nx) x \(ny) complex field needs \(nx) x \(ny) real and imaginary parts, got \(real.count) and \(imaginary.count)")
+        }
+        self.init(storing: nx, ny, real, imaginary)
+    }
+
+    private init(storing nx: Int, _ ny: Int, _ real: [Double], _ imaginary: [Double]) {
         self.nx = nx
         self.ny = ny
         self.real = real
         self.imaginary = imaginary
+    }
+
+    /// The kit's own construction, from arrays it sized: a mismatch is a bug of the kit and traps.
+    package static func unchecked(nx: Int, ny: Int, real: [Double], imaginary: [Double]) -> ComplexField {
+        precondition(real.count == nx * ny && imaginary.count == nx * ny, "ComplexField: \(nx) x \(ny) values required")
+        return ComplexField(storing: nx, ny, real, imaginary)
+    }
+
+    /// Whether `count` values fill a positive nx × ny grid (false where nx · ny overflows).
+    package static func fills(_ nx: Int, _ ny: Int, _ count: Int) -> Bool {
+        let (product, overflow) = nx.multipliedReportingOverflow(by: ny)
+        return nx > 0 && ny > 0 && !overflow && product == count
     }
 
     /// The value at (ix, iy).
@@ -52,12 +73,26 @@ public struct ComplexField: Sendable, Hashable {
 public struct RealField: Sendable, Hashable {
     public let nx: Int
     public let ny: Int
-    public var values: [Double]
+    /// nx × ny values, row-major (set by the kit only, so the count always matches the grid).
+    public package(set) var values: [Double]
     public let samplingX: Double
     public let samplingY: Double
 
-    public init(nx: Int, ny: Int, values: [Double], samplingX: Double, samplingY: Double) {
+    /// - Throws: `SimulatoError.invalidShape` unless `values` holds nx × ny numbers (nx and ny positive).
+    public init(nx: Int, ny: Int, values: [Double], samplingX: Double, samplingY: Double) throws {
+        guard ComplexField.fills(nx, ny, values.count) else {
+            throw SimulatoError.invalidShape("a \(nx) x \(ny) real field needs \(nx) x \(ny) values, got \(values.count)")
+        }
+        self.init(storing: nx, ny, values, samplingX, samplingY)
+    }
+
+    /// The kit's own construction, from an array it sized: a mismatch is a bug of the kit and traps.
+    package static func unchecked(nx: Int, ny: Int, values: [Double], samplingX: Double, samplingY: Double) -> RealField {
         precondition(values.count == nx * ny, "RealField: \(nx) x \(ny) values required")
+        return RealField(storing: nx, ny, values, samplingX, samplingY)
+    }
+
+    private init(storing nx: Int, _ ny: Int, _ values: [Double], _ samplingX: Double, _ samplingY: Double) {
         self.nx = nx
         self.ny = ny
         self.values = values

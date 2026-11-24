@@ -107,7 +107,7 @@ func checkMultislice(_ r: inout Report) {
         r.check("wrapped: −1 → 3, 5 → 1, top face → 0, x = box → 0",
                 w[0].position == SIMD3(3, 1, 0) && w[1].position == SIMD3(0, 0, 1), "got \(w.map(\.position))")
         // edges 2.5, 5, 7.5, 10 (minus 1e-12): z = 2.5 is already in slice 1; z past the last edge → last slice
-        r.equal("sliceIndices at 0, 2.4, 2.5, 9.99, 10", Slicing.sliceIndices(z: [0, 2.4, 2.5, 9.99, 10], thicknesses: [2.5, 2.5, 2.5, 2.5]),
+        r.equal("sliceIndices at 0, 2.4, 2.5, 9.99, 10", try Slicing.sliceIndices(z: [0, 2.4, 2.5, 9.99, 10], thicknesses: [2.5, 2.5, 2.5, 2.5]),
                 [0, 0, 1, 3, 3])
     }
 
@@ -137,7 +137,7 @@ func checkMultislice(_ r: inout Report) {
         let d = maxDifference(f32.slices[1].values, v.slices[1].values)
         r.check("parameterization: .abTEMFloat32 differs from .exact by under 1e-6 relative", d > 0
                 && d < 1e-6 * (v.slices[1].values.max() ?? 1), "got \(d)")
-        let rebuilt = ProjectedPotential(grid: v.grid, slices: v.slices)
+        let rebuilt = try ProjectedPotential(grid: v.grid, slices: v.slices)
         r.check("init(grid:slices:) from another potential's slices; sliceOfAtom empty", rebuilt.slices == v.slices
                 && rebuilt.sliceOfAtom.isEmpty && rebuilt.thickness == 4)
         r.check("ProjectedPotential and PotentialSlice are Hashable", v == v && v != rebuilt && Set(v.slices).count == 2)
@@ -351,7 +351,10 @@ func checkMultislice(_ r: inout Report) {
         r.check("lazyPotentials: σ = 0 configurations equal the static Potential", lazies.count == 2 && lazies.allSatisfy { $0 == lazy })
         let slice = PotentialSlice(thickness: 2, values: eager.slices[0].values)
         r.check("PotentialSlice(thickness:values:) and ProjectedPotential(grid:slices:)",
-                ProjectedPotential(grid: eager.grid, slices: [slice]).slices == [eager.slices[0]])
+                try ProjectedPotential(grid: eager.grid, slices: [slice]).slices == [eager.slices[0]])
+        r.refusesCase("ProjectedPotential(grid:slices:) with a slice of the wrong size", "invalidShape") {
+            try ProjectedPotential(grid: eager.grid, slices: [PotentialSlice(thickness: 1, values: [0, 1])])
+        }
         if Multislice.metalIsAvailable {
             let gpu = try Multislice.run(wave, through: lazy, backend: .metal)[0]
             var worst = 0.0

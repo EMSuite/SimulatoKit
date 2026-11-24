@@ -101,7 +101,7 @@ extension RealField {
                                 fractional: Bool = false) throws -> RealSpaceLineProfiles {
         let r = try interpolatedLine(frame: imageFrame, start: start, end: end, sampling: sampling, gpts: gpts, width: width,
                                      margin: margin, order: order, endpoint: endpoint, fractional: fractional)
-        return RealSpaceLineProfiles(count: r.values.count, values: r.values, sampling: r.line.sampling, start: r.line.start,
+        return try RealSpaceLineProfiles(count: r.values.count, values: r.values, sampling: r.line.sampling, start: r.line.start,
                                      end: r.line.end, lineWidth: r.width)
     }
 
@@ -124,7 +124,7 @@ extension RealField {
                                           endpoint: Bool = false, fractional: Bool = false) throws -> ReciprocalSpaceLineProfiles {
         let r = try interpolatedLine(frame: patternFrame, start: start, end: end, sampling: sampling, gpts: gpts, width: width,
                                      margin: margin, order: order, endpoint: endpoint, fractional: fractional)
-        return ReciprocalSpaceLineProfiles(count: r.values.count, values: r.values, sampling: r.line.sampling,
+        return try ReciprocalSpaceLineProfiles(count: r.values.count, values: r.values, sampling: r.line.sampling,
                                            start: r.line.start, end: r.line.end, lineWidth: r.width)
     }
 

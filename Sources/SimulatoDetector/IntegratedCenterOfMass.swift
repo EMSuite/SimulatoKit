@@ -25,8 +25,8 @@ extension ScanMeasurement {
             gx[i] = values[2 * i]
             gy[i] = values[2 * i + 1]
         }
-        return (RealField(nx: scanShape[0], ny: scanShape[1], values: gx, samplingX: samplingX, samplingY: samplingY),
-                RealField(nx: scanShape[0], ny: scanShape[1], values: gy, samplingX: samplingX, samplingY: samplingY))
+        return (RealField.unchecked(nx: scanShape[0], ny: scanShape[1], values: gx, samplingX: samplingX, samplingY: samplingY),
+                RealField.unchecked(nx: scanShape[0], ny: scanShape[1], values: gy, samplingX: samplingX, samplingY: samplingY))
     }
 
     /// The integrated centre of mass (iCOM; the integrated DPC of a two-value DPC measurement is the same operation): the

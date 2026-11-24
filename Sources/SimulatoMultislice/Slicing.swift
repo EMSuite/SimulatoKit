@@ -85,7 +85,11 @@ public enum Slicing {
 
     /// The slice index of each z: e_{j−1} ≤ z < e_j with e_j = Σ_{i ≤ j} s_i − 1e−12 (NumPy's `digitize`); a z past the
     /// last edge goes into the last slice.
-    public static func sliceIndices(z: [Double], thicknesses: [Double]) -> [Int] {
+    /// - Throws: `SimulatoError.invalidShape` for no thicknesses while there are atoms (they would have no slice).
+    public static func sliceIndices(z: [Double], thicknesses: [Double]) throws -> [Int] {
+        guard !thicknesses.isEmpty || z.isEmpty else {
+            throw SimulatoError.invalidShape("\(z.count) atoms and no slice thicknesses")
+        }
         var edges: [Double] = []
         var acc = 0.0
         for s in thicknesses {

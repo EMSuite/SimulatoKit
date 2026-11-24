@@ -56,7 +56,7 @@ do {
 
     // The crystal: 3 x 3 cells across, 10 cells deep, on a 256 x 256 grid, slices of about 2 Å, at 300 keV.
     let energy = 300e3, Cs = 1e7  // Å (1 mm)
-    let structure = cell.repeated(3, 3, 10)
+    let structure = try cell.repeated(3, 3, 10)
     let beam = try ElectronBeam(energy: energy)
     // A `Potential` is the sliced structure; on Metal each slice is built on the GPU, on the CPU by `build()`.
     let backend: Backend = Multislice.metalIsAvailable ? .metal : .cpu

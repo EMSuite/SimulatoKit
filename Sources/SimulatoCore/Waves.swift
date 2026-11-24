@@ -22,7 +22,8 @@ public struct Waves: Sendable, Hashable {
         case full
     }
 
-    public var field: ComplexField
+    /// The complex field on `grid` (set by the kit only, so its size always matches the grid).
+    public package(set) var field: ComplexField
     public let grid: Grid
     public let beam: ElectronBeam
     public let normalization: Normalization
@@ -31,9 +32,24 @@ public struct Waves: Sendable, Hashable {
     /// `_apply_tilt_to_fresnel_propagator_array`), and the exit waves keep it.
     public let tilt: SIMD2<Double>
 
+    /// - Throws: `SimulatoError.invalidShape` unless the field has the grid's nx × ny points.
     public init(field: ComplexField, grid: Grid, beam: ElectronBeam, normalization: Normalization,
-                tilt: SIMD2<Double> = .zero) {
+                tilt: SIMD2<Double> = .zero) throws {
+        guard field.nx == grid.nx && field.ny == grid.ny else {
+            throw SimulatoError.invalidShape("a \(field.nx) x \(field.ny) field on a \(grid.nx) x \(grid.ny) grid")
+        }
+        self.init(storing: field, grid, beam, normalization, tilt)
+    }
+
+    /// The kit's own construction, on the field's own grid: a mismatch is a bug of the kit and traps.
+    package static func unchecked(field: ComplexField, grid: Grid, beam: ElectronBeam, normalization: Normalization,
+                                  tilt: SIMD2<Double> = .zero) -> Waves {
         precondition(field.nx == grid.nx && field.ny == grid.ny, "Waves: the field must match the grid")
+        return Waves(storing: field, grid, beam, normalization, tilt)
+    }
+
+    private init(storing field: ComplexField, _ grid: Grid, _ beam: ElectronBeam, _ normalization: Normalization,
+                 _ tilt: SIMD2<Double>) {
         self.field = field
         self.grid = grid
         self.beam = beam
@@ -43,7 +59,7 @@ public struct Waves: Sendable, Hashable {
 
     /// The plane wave ψ = 1 at every pixel (abTEM's `PlaneWave(normalize=False)`).
     public static func planeWave(beam: ElectronBeam, grid: Grid, tilt: SIMD2<Double> = .zero) -> Waves {
-        Waves(field: ComplexField(nx: grid.nx, ny: grid.ny,
+        Waves.unchecked(field: ComplexField.unchecked(nx: grid.nx, ny: grid.ny,
                                   real: [Double](repeating: 1, count: grid.count),
                                   imaginary: [Double](repeating: 0, count: grid.count)),
               grid: grid, beam: beam, normalization: .values, tilt: tilt)
@@ -51,7 +67,7 @@ public struct Waves: Sendable, Hashable {
 
     /// |ψ|² per pixel, sampled as the grid.
     public func intensity() -> RealField {
-        RealField(nx: grid.nx, ny: grid.ny, values: field.squaredMagnitude(),
+        RealField.unchecked(nx: grid.nx, ny: grid.ny, values: field.squaredMagnitude(),
                   samplingX: grid.samplingX, samplingY: grid.samplingY)
     }
 
@@ -81,7 +97,7 @@ public struct Waves: Sendable, Hashable {
                 out[ox * size.ny + oy] = re * re + im * im
             }
         }
-        return RealField(nx: size.nx, ny: size.ny, values: out,
+        return RealField.unchecked(nx: size.nx, ny: size.ny, values: out,
                          samplingX: grid.reciprocalSamplingX, samplingY: grid.reciprocalSamplingY)
     }
 

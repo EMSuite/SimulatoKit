@@ -152,7 +152,7 @@ extension Multislice {
                                                total: count, unit: .positions, fraction: fraction))
         }
         return zip(incidents, fields).map {
-            Waves(field: $0.1, grid: prepared.grid, beam: $0.0.beam, normalization: $0.0.normalization, tilt: $0.0.tilt)
+            Waves.unchecked(field: $0.1, grid: prepared.grid, beam: $0.0.beam, normalization: $0.0.normalization, tilt: $0.0.tilt)
         }
     }
 }

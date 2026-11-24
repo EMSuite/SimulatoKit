@@ -79,15 +79,29 @@ public struct ScanWaves: Sendable {
     public var rows: Int { template.grid.nx }
     public var columns: Int { template.grid.ny }
 
-    /// - Precondition: the arrays hold positions × rows × columns numbers.
-    public init(scanShape: [Int], template: Waves, real: [Double], imaginary: [Double]) {
-        var filled = scanShape.count == 2
-        if filled {
-            let (a, o1) = scanShape[0].multipliedReportingOverflow(by: scanShape[1])
-            let (b, o2) = a.multipliedReportingOverflow(by: template.grid.count)
-            filled = !o1 && !o2 && real.count == b && imaginary.count == real.count
+    /// - Throws: `SimulatoError.invalidShape` unless `scanShape` has two non-negative axes and the arrays hold
+    ///   positions × rows × columns numbers.
+    public init(scanShape: [Int], template: Waves, real: [Double], imaginary: [Double]) throws {
+        guard Self.fills(scanShape, template, real.count, imaginary.count) else {
+            throw SimulatoError.invalidShape("scan shape \(scanShape) (two axes) × \(template.grid.nx) x \(template.grid.ny) points for \(real.count) real and \(imaginary.count) imaginary parts")
         }
-        precondition(filled, "ScanWaves: the values do not fill the shapes")
+        self.init(storing: scanShape, template, real, imaginary)
+    }
+
+    /// The kit's own construction, from arrays it sized: a mismatch is a bug of the kit and traps.
+    package static func unchecked(scanShape: [Int], template: Waves, real: [Double], imaginary: [Double]) -> ScanWaves {
+        precondition(fills(scanShape, template, real.count, imaginary.count), "ScanWaves: the values do not fill the shapes")
+        return ScanWaves(storing: scanShape, template, real, imaginary)
+    }
+
+    static func fills(_ scanShape: [Int], _ template: Waves, _ real: Int, _ imaginary: Int) -> Bool {
+        guard scanShape.count == 2, scanShape[0] >= 0, scanShape[1] >= 0 else { return false }
+        let (a, o1) = scanShape[0].multipliedReportingOverflow(by: scanShape[1])
+        let (b, o2) = a.multipliedReportingOverflow(by: template.grid.count)
+        return !o1 && !o2 && real == b && imaginary == real
+    }
+
+    private init(storing scanShape: [Int], _ template: Waves, _ real: [Double], _ imaginary: [Double]) {
         self.scanShape = scanShape
         self.template = template
         self.real = real
@@ -98,9 +112,9 @@ public struct ScanWaves: Sendable {
     public subscript(ix: Int, iy: Int) -> Waves {
         let n = template.grid.count
         let base = (ix * scanShape[1] + iy) * n
-        let field = ComplexField(nx: rows, ny: columns, real: Array(real[base..<(base + n)]),
+        let field = ComplexField.unchecked(nx: rows, ny: columns, real: Array(real[base..<(base + n)]),
                                  imaginary: Array(imaginary[base..<(base + n)]))
-        return Waves(field: field, grid: template.grid, beam: template.beam, normalization: template.normalization,
+        return Waves.unchecked(field: field, grid: template.grid, beam: template.beam, normalization: template.normalization,
                      tilt: template.tilt)
     }
 }
@@ -212,6 +226,6 @@ extension STEM {
             }
         }
         guard let t = template else { throw SimulatoError.invalidScan("no scan position") }
-        return ScanWaves(scanShape: [scan.nx, scan.ny], template: t, real: re, imaginary: im)
+        return ScanWaves.unchecked(scanShape: [scan.nx, scan.ny], template: t, real: re, imaginary: im)
     }
 }

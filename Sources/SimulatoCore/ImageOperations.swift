@@ -42,7 +42,7 @@ extension RealField {
         }
         let values = try integrateGradient(gx: gx.values, gy: gy.values, nx: gx.nx, ny: gx.ny,
                                            samplingX: gx.samplingX, samplingY: gx.samplingY)
-        return RealField(nx: gx.nx, ny: gx.ny, values: values, samplingX: gx.samplingX, samplingY: gx.samplingY)
+        return RealField.unchecked(nx: gx.nx, ny: gx.ny, values: values, samplingX: gx.samplingX, samplingY: gx.samplingY)
     }
 
     /// The tiled image (abTEM `Images.tile`): `repetitionsX` × `repetitionsY` copies; the sampling stays.
@@ -58,7 +58,7 @@ extension RealField {
             let row = (ix % nx) * ny
             for iy in 0..<my { out[ix * my + iy] = values[row + iy % ny] }
         }
-        return RealField(nx: mx, ny: my, values: out, samplingX: samplingX, samplingY: samplingY)
+        return RealField.unchecked(nx: mx, ny: my, values: out, samplingX: samplingX, samplingY: samplingY)
     }
 
     /// How `integrateDisc` treats a disc that crosses the image border (abTEM's `border`).
@@ -132,7 +132,7 @@ extension ComplexField {
     /// component (abTEM's complex `Images`), with the sampling [Å] of its pixels.
     public func integratedGradient(samplingX: Double, samplingY: Double) throws -> RealField {
         let values = try integrateGradient(gx: real, gy: imaginary, nx: nx, ny: ny, samplingX: samplingX, samplingY: samplingY)
-        return RealField(nx: nx, ny: ny, values: values, samplingX: samplingX, samplingY: samplingY)
+        return RealField.unchecked(nx: nx, ny: ny, values: values, samplingX: samplingX, samplingY: samplingY)
     }
 }
 
@@ -142,8 +142,8 @@ func integrateGradient(gx: [Double], gy: [Double], nx: Int, ny: Int, samplingX: 
         throw SimulatoError.invalidSampling(samplingX, samplingY)
     }
     let fft = try FFT2D(nx: nx, ny: ny)
-    var fx = ComplexField(nx: nx, ny: ny, real: gx, imaginary: [Double](repeating: 0, count: nx * ny))
-    var fy = ComplexField(nx: nx, ny: ny, real: gy, imaginary: [Double](repeating: 0, count: nx * ny))
+    var fx = ComplexField.unchecked(nx: nx, ny: ny, real: gx, imaginary: [Double](repeating: 0, count: nx * ny))
+    var fy = ComplexField.unchecked(nx: nx, ny: ny, real: gy, imaginary: [Double](repeating: 0, count: nx * ny))
     fft.forward(&fx)
     fft.forward(&fy)
     let kx = fftFrequencies(nx, spacing: samplingX), ky = fftFrequencies(ny, spacing: samplingY)

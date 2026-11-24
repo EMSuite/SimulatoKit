@@ -41,7 +41,7 @@ enum Slice4Pins {
         let d: [Double] = loaded.blob.withUnsafeBytes { raw in
             (0..<count).map { Double(bitPattern: UInt64(littleEndian: raw.loadUnaligned(fromByteOffset: offset + 8 * $0, as: UInt64.self))) }
         }
-        return ComplexField(nx: shape[0], ny: shape[1], real: stride(from: 0, to: count, by: 2).map { d[$0] },
+        return ComplexField.unchecked(nx: shape[0], ny: shape[1], real: stride(from: 0, to: count, by: 2).map { d[$0] },
                             imaginary: stride(from: 1, to: count, by: 2).map { d[$0] })
     }
 

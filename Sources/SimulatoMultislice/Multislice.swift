@@ -192,7 +192,7 @@ public enum Multislice {
             multiply(&psi, by: propagators[slice.thickness]!)
             fft.inverse(&psi)
             if wanted.contains(j) {
-                out.append(Waves(field: psi, grid: grid, beam: incident.beam, normalization: incident.normalization,
+                out.append(Waves.unchecked(field: psi, grid: grid, beam: incident.beam, normalization: incident.normalization,
                                  tilt: incident.tilt))
             }
             try afterSlice(j)

@@ -22,12 +22,12 @@ struct DetectorHardeningTests {
         let grid = try Grid(nx: 16, ny: 16, extentX: 4, extentY: 4)
         let beam = try ElectronBeam(energy: 200e3)
         let probe = try Probe(beam: beam, grid: grid, aperture: Aperture(semiangleCutoff: 20))
-        let potential = ProjectedPotential(grid: grid, slices: [PotentialSlice(thickness: 1, values: [Double](repeating: 0, count: 256))])
+        let potential = ProjectedPotential.unchecked(grid: grid, slices: [PotentialSlice(thickness: 1, values: [Double](repeating: 0, count: 256))])
         return (probe, potential)
     }
 
     @Test func centreOfMassOfALineScanIsRefused() throws {
-        let m = ScanMeasurement(scanShape: [4], valueShape: [2], values: [Double](repeating: 0, count: 8))
+        let m = ScanMeasurement.unchecked(scanShape: [4], valueShape: [2], values: [Double](repeating: 0, count: 8))
         #expect(throws: SimulatoError.self) { try m.gradientImages(samplingX: 1, samplingY: 1) }
         #expect(throws: SimulatoError.self) { try m.integratedCenterOfMass(samplingX: 1, samplingY: 1) }
     }
@@ -53,16 +53,16 @@ struct DetectorHardeningTests {
     }
 
     @Test func emptyProfilesAreRefused() throws {
-        let empty = RealSpaceLineProfiles(count: 0, values: [], sampling: 1)
+        let empty = RealSpaceLineProfiles.unchecked(count: 0, values: [], sampling: 1)
         #expect(throws: SimulatoError.self) { try empty.width() }
         #expect(throws: SimulatoError.self) { try empty.interpolate(gpts: 3) }
-        let p = RealSpaceLineProfiles(count: 4, values: [0, 1, 1, 0], sampling: 1)
+        let p = RealSpaceLineProfiles.unchecked(count: 4, values: [0, 1, 1, 0], sampling: 1)
         #expect(throws: SimulatoError.self) { try p.interpolate(gpts: 1 << 40) }
         #expect(try p.interpolate(gpts: 8).count == 8)
     }
 
     @Test func hugeWidthIsRefused() throws {
-        let f = RealField(nx: 8, ny: 8, values: [Double](repeating: 1, count: 64), samplingX: 1, samplingY: 1)
+        let f = RealField.unchecked(nx: 8, ny: 8, values: [Double](repeating: 1, count: 64), samplingX: 1, samplingY: 1)
         #expect(throws: SimulatoError.self) { try f.interpolateLine(end: SIMD2(4, 0), width: 1e300) }
         #expect(throws: SimulatoError.self) { try f.interpolateLine(end: SIMD2(4, 0), width: 1e12) }
         #expect(try f.interpolateLine(end: SIMD2(4, 0), width: 3).count > 0)
@@ -81,22 +81,22 @@ struct DetectorTrapTests {
     /// A NaN or infinite value made the Poisson draw loop forever; a mean beyond an Int trapped.
     @Test func poissonNoiseRefusesValuesWithNoDraw() throws {
         for bad in [Double.nan, .infinity, 1e300] {
-            let m = ScanMeasurement(scanShape: [2], valueShape: [], values: [1, bad])
+            let m = ScanMeasurement.unchecked(scanShape: [2], valueShape: [], values: [1, bad])
             #expect(throws: SimulatoError.self) { try m.poissonNoise(dose: 10, seed: 1) }
             #expect(throws: SimulatoError.self) { try m.poissonNoise(dose: 10, samples: 2, seed: 1) }
         }
         // −∞ is not finite either: refused, not clipped to 0.
-        let negative = ScanMeasurement(scanShape: [2], valueShape: [], values: [1, -.infinity])
+        let negative = ScanMeasurement.unchecked(scanShape: [2], valueShape: [], values: [1, -.infinity])
         #expect(throws: SimulatoError.self) { try negative.poissonNoise(dose: 10, seed: 1) }
         // Finite values still draw, and a dose of 0 gives zeros.
-        let fine = ScanMeasurement(scanShape: [2], valueShape: [], values: [0.5, -3])
+        let fine = ScanMeasurement.unchecked(scanShape: [2], valueShape: [], values: [0.5, -3])
         #expect(try fine.poissonNoise(dose: 0, seed: 1).values == [0, 0])
         #expect(try fine.poissonNoise(dose: 1e6, seed: 1).values[1] == 0)
     }
 
     /// A source size far above the scan's sampling made a kernel radius beyond an Int (a trap) or memory.
     @Test func hugeSourceSizeIsRefused() throws {
-        let m = ScanMeasurement(scanShape: [4, 4], valueShape: [], values: [Double](repeating: 1, count: 16))
+        let m = ScanMeasurement.unchecked(scanShape: [4, 4], valueShape: [], values: [Double](repeating: 1, count: 16))
         #expect(throws: SimulatoError.self) { try m.gaussianSourceSize(sigma: 1e12, samplingX: 1, samplingY: 1) }
         #expect(throws: SimulatoError.self) { try m.gaussianSourceSize(sigma: 1, samplingX: 1e-300, samplingY: 1) }
         #expect(try m.gaussianSourceSize(sigma: 2, samplingX: 1, samplingY: 1).values.count == 16)
@@ -106,7 +106,7 @@ struct DetectorTrapTests {
     @Test func segmentedDetectorOnAFineAngularSamplingDoesNotTrap() throws {
         let grid = try Grid(nx: 8, ny: 8, extentX: 1e300, extentY: 1e300)
         let beam = try ElectronBeam(energy: 200e3)
-        let p = DiffractionIntensity(grid: grid, beam: beam, values: [Double](repeating: 1, count: 64))
+        let p = DiffractionIntensity.unchecked(grid: grid, beam: beam, values: [Double](repeating: 1, count: 64))
         let d = try SegmentedDetector(radialBins: 2, azimuthalBins: 4, inner: 0, outer: 10)
         #expect(try d.detect(p).count == 8)
     }
@@ -115,7 +115,7 @@ struct DetectorTrapTests {
     @Test func miscountingDetectorIsRefused() throws {
         let grid = try Grid(nx: 16, ny: 16, extentX: 4, extentY: 4)
         let probe = try Probe(beam: ElectronBeam(energy: 200e3), grid: grid, aperture: Aperture(semiangleCutoff: 20))
-        let potential = ProjectedPotential(grid: grid, slices: [PotentialSlice(thickness: 1, values: [Double](repeating: 0, count: 256))])
+        let potential = ProjectedPotential.unchecked(grid: grid, slices: [PotentialSlice(thickness: 1, values: [Double](repeating: 0, count: 256))])
         let scan = try GridScan(start: SIMD2(0, 0), end: SIMD2(4, 4), nx: 2, ny: 2)
         #expect(throws: SimulatoError.self) {
             try STEM.scan(probe: probe, potentials: [potential], scan: scan, detectors: [MiscountingDetector()])
@@ -129,5 +129,28 @@ struct DetectorTrapTests {
         #expect(throws: SimulatoError.self) { try phonons.configuration(2) }
         #expect(throws: SimulatoError.self) { try phonons.configuration(-1) }
         #expect(try phonons.configuration(1).atoms.count == 1)
+    }
+
+    /// #80: the measurement, intensity, exit-wave and line-profile initialisers trapped on values that do not fill
+    /// their shapes.
+    @Test func measurementsRefuseValuesThatDoNotFillTheShape() throws {
+        #expect(throws: SimulatoError.self) { try ScanMeasurement(scanShape: [2, 2], valueShape: [], values: [1, 2, 3]) }
+        #expect(throws: SimulatoError.self) { try ScanMeasurement(scanShape: [], valueShape: [], values: [1]) }
+        #expect(throws: SimulatoError.self) { try ScanMeasurement(scanShape: [1, 1, 1], valueShape: [], values: [1]) }
+        #expect(throws: SimulatoError.self) { try ScanMeasurement(scanShape: [-1, -1], valueShape: [], values: [1]) }
+        #expect(try ScanMeasurement(scanShape: [2], valueShape: [2], values: [1, 2, 3, 4]).values.count == 4)
+        let grid = try Grid(nx: 4, ny: 4, extentX: 1, extentY: 1)
+        let beam = try ElectronBeam(energy: 200e3)
+        #expect(throws: SimulatoError.self) { try DiffractionIntensity(grid: grid, beam: beam, values: [1]) }
+        let template = Waves.planeWave(beam: beam, grid: grid)
+        #expect(throws: SimulatoError.self) { try ScanWaves(scanShape: [2], template: template, real: [], imaginary: []) }
+        #expect(throws: SimulatoError.self) {
+            try ScanWaves(scanShape: [1, 1], template: template, real: [Double](repeating: 0, count: 16), imaginary: [])
+        }
+        #expect(try ScanWaves(scanShape: [1, 1], template: template, real: [Double](repeating: 0, count: 16),
+                              imaginary: [Double](repeating: 0, count: 16)).positionCount == 1)
+        #expect(throws: SimulatoError.self) { try RealSpaceLineProfiles(count: 3, values: [1, 2], sampling: 1) }
+        #expect(throws: SimulatoError.self) { try ReciprocalSpaceLineProfiles(ensembleShape: [2], count: 2, values: [1], sampling: 1) }
+        #expect(try RealSpaceLineProfiles(ensembleShape: [2], count: 2, values: [1, 2, 3, 4], sampling: 1).count == 2)
     }
 }

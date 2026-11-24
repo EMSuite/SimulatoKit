@@ -44,7 +44,7 @@ enum SlabPins {
                 Double(bitPattern: UInt64(littleEndian: raw.loadUnaligned(fromByteOffset: offset + 8 * i, as: UInt64.self)))
             }
         }
-        return ComplexField(nx: shape[0], ny: shape[1], real: stride(from: 0, to: d.count, by: 2).map { d[$0] },
+        return ComplexField.unchecked(nx: shape[0], ny: shape[1], real: stride(from: 0, to: d.count, by: 2).map { d[$0] },
                             imaginary: stride(from: 1, to: d.count, by: 2).map { d[$0] })
     }
 
