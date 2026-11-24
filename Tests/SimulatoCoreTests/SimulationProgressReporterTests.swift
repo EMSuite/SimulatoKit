@@ -31,7 +31,7 @@ struct ProgressReporterTests {
     @Test func atMostOneCallPerInterval() {
         let log = ProgressLog()
         let clock = HandClock()
-        var reporter = ProgressReporter(log.handler, interval: .milliseconds(100), now: { clock.now })
+        var reporter = SimulationProgressReporter(log.handler, interval: .milliseconds(100), now: { clock.now })
         // Calls every 30 ms for 1 s: delivered at 0, 120, 240, ... (the first call after each 100 ms), 9 in all.
         for k in 0...33 {
             clock.elapsed = .milliseconds(30 * k)
@@ -40,7 +40,7 @@ struct ProgressReporterTests {
         #expect(log.all.map(\.completed) == [0, 4, 8, 12, 16, 20, 24, 28, 32])
         // At most ten in any second, whatever the pace.
         let log2 = ProgressLog()
-        var fast = ProgressReporter(log2.handler, interval: .milliseconds(100), now: { clock.now })
+        var fast = SimulationProgressReporter(log2.handler, interval: .milliseconds(100), now: { clock.now })
         for k in 0..<10_000 {
             clock.elapsed = .microseconds(100 * k)
             fast.report(Self.step(k))
@@ -48,11 +48,11 @@ struct ProgressReporterTests {
         #expect(log2.all.count == 10)
         // Interval zero: every call.
         let log3 = ProgressLog()
-        var every = ProgressReporter(log3.handler, interval: .zero, now: { clock.now })
+        var every = SimulationProgressReporter(log3.handler, interval: .zero, now: { clock.now })
         for k in 0..<5 { every.report(Self.step(k)) }
         #expect(log3.all.count == 5)
         // No handler: nothing to call, and the progress is not even built.
-        var none = ProgressReporter(nil, interval: .zero)
+        var none = SimulationProgressReporter(nil, interval: .zero)
         #expect(!none.isActive)
         none.report(Self.step(0))
     }
@@ -60,7 +60,7 @@ struct ProgressReporterTests {
     @Test func noCallOnceTheTaskIsCancelled() async {
         let log = ProgressLog()
         let task = Task {
-            var reporter = ProgressReporter(log.handler, interval: .zero)
+            var reporter = SimulationProgressReporter(log.handler, interval: .zero)
             reporter.report(Self.step(1))
             withUnsafeCurrentTask { $0?.cancel() }
             reporter.report(Self.step(2))

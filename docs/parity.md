@@ -4,8 +4,8 @@ The coverage table of abTEM 1.0.10 (`References/python/abtem`, git `164e644`): i
 the source in `site-packages/abtem` against SimulatoKit. Rewritten for 0.3.0 (the growing phase's kit audit); every row
 has one state and one priority.
 
-**Totals (131 rows): 39 present, 42 partial, 50 missing.** By priority: **study** 27 rows (12 present, 8 partial, 7 missing);
-**useful** 82 (27, 34, 21); **not planned** 22 (all missing, each with its reason).
+**Totals (131 rows): 39 present, 43 partial, 49 missing.** By priority: **study** 27 rows (12 present, 8 partial, 7 missing);
+**useful** 82 (27, 35, 20); **not planned** 22 (all missing, each with its reason).
 
 States:
 
@@ -120,8 +120,10 @@ detector, the Gaussian source size and Poisson noise on a scan.
 | `CTF(semiangle_cutoff, soft, focal_spread, angular_spread, aberration_coefficients, energy, extent, gpts, sampling, flip_phase, wiener_snr)` | `ContrastTransferFunction(aberrations:semiangleCutoff:softAperture:focalSpread:angularSpread:)`, `.kernel(on:wavelength:)` | **partial**: `flip_phase` and `wiener_snr` not offered; energy and grid are given at `kernel(on:wavelength:)`, not stored; negative spreads refused (abTEM overflows) | useful |
 | `SpatialEnvelope(angular_spread, aberration_coefficients)`, `TemporalEnvelope(focal_spread)` (partial coherence) | `ContrastTransferFunction.spatialEnvelope`, `.temporalEnvelope` | **present**: values at (α, φ) and inside the kernel; the quasi-coherent approximation, as abTEM | useful |
 | `transfer.scherzer_defocus`, `point_resolution`, `nyquist_sampling` (functions) | `ContrastTransferFunction.scherzerDefocus`, `.pointResolution`, `.nyquistSampling` | **present** | useful |
-| `CTF.scherzer_defocus`, `.point_resolution`, `.crossover_angle` (from the CTF's own Cs and energy), `BaseAperture.nyquist_sampling` | | **missing**: planned: SimulatoProbe (instance forms; the statics take Cs and energy) | useful |
-| `CTF.to_point_spread_functions`, `.profiles`, `.to_diffraction_patterns` | | **missing**: planned: SimulatoProbe | useful |
+| `CTF.scherzer_defocus`, `.point_resolution`, `.crossover_angle` (from the CTF's own Cs and energy) | `ContrastTransferFunction.scherzerDefocus(energy:)`, `.pointResolution(energy:)`, `.crossoverAngle(energy:)` | **present** (#102): Cs = 0 refused by Scherzer defocus as abTEM, and by the crossover angle (abTEM divides by zero); pinned on four Cs and three energies at 1e−14 | useful |
+| `BaseAperture.nyquist_sampling` (instance form) | | **missing**: planned: SimulatoProbe (the static takes the cutoff and energy) | useful |
+| `CTF.profiles(gpts, max_angle, phi)` | `ContrastTransferFunction.profiles(energy:points:maxAngle:phi:)` → `TransferFunctionProfiles` | **present** (#102): the phase term −sin χ, the spatial and temporal envelopes and the aperture where set, and their product; abTEM 1.0.10's code defaults (1000 points, 50 mrad without an aperture, 1.6 × the cutoff with one; its docstring says 1.5), a hard aperture edge as abTEM's profiles have no grid; pinned on four CTFs (Cs only, Scherzer with aperture and focal spread, both envelopes with C50, astigmatism and trefoil at φ = 0.7) at 1e−12 of the largest value, the aperture exact | useful |
+| `CTF.to_point_spread_functions`, `.to_diffraction_patterns` | | **missing**: planned: SimulatoProbe | useful |
 | `CTF.show`, `BaseTransferFunction.show` | | **missing**: not planned: plotting | not planned |
 | `Bullseye`, `Vortex`, `AnnularAperture`, `Zernike`, `RadialPhasePlate` | | **missing**: planned as needed: SimulatoProbe | useful |
 | `transfer.polar2cartesian`, `cartesian2polar` | | **missing**: planned: SimulatoProbe | useful |
@@ -174,7 +176,7 @@ detector, the Gaussian source size and Poisson noise on a scan.
 | `PolarMeasurements` (`integrate`, `integrate_radial`, `differentials`, `to_diffraction_patterns`) | `ScanMeasurement.integrate(detectorRegions:)`, `.integrate(detector:)`, `.integrateRadial(inner:outer:detector:)`, `.differentials(direction1:direction2:)` on a `SegmentedDetector` scan | **partial**: regions, radial limits (truncated to bins as abTEM) and the DPC differentials (second regions minus first, abTEM's order) against abTEM on a planted scan, float64 sums at rtol 1e-7, differentials at 1e-6 (abTEM complex64); the differentials come as two scans, not one complex image; `azimuthal_limits` not offered (abTEM divides them by the radial sampling), `to_diffraction_patterns` not offered; refused where abTEM is silent: no region (abTEM: zeros), a region or radial index below 0 (Python reads it from the end) | useful |
 | `RealSpaceLineProfiles`, `ReciprocalSpaceLineProfiles`, `_BaseMeasurement1D.width`, `.interpolate` | `RealSpaceLineProfiles`, `ReciprocalSpaceLineProfiles`, `LineProfiles.width(height:)`, `.interpolate(sampling:gpts:order:endpoint:)`, `ScanMeasurement.lineProfiles(for:)` | **present**: width to 4.5e-8 and interpolate to 5.5e-8 of the maximum against abTEM (abTEM stores both as float32; `assert_allclose` rtol 1e-7 holds at 0.6 of its bound), on the scan's profile and on planted profiles with ensemble axes, orders 0 to 5, both endpoints; `lineProfiles` only for detectors of one number or a vector (abTEM returns other measurement types for segmented and pixelated); `RealSpaceLineProfiles.tile`, `ReciprocalSpaceLineProfiles.angular_extent`, `show` and the lazy path not offered | useful |
 | `MeasurementsEnsemble`, `BaseMeasurements.to_measurement_ensemble`, `normalize_ensemble` | | **missing**: not planned: Swift arrays; a caller keeps the configurations apart | not planned |
-| `IndexedDiffractionPatterns`, `DiffractionPatterns.index_diffraction_spots` | | **missing**: planned: with DiffractoKit's indexing | useful |
+| `IndexedDiffractionPatterns`, `DiffractionPatterns.index_diffraction_spots` | `BeamIntensities(exitWaves:of:exitPlanes:)` (`beams`, `thicknesses`, `intensities`, `intensities(of:)`), `BeamIntensities.frequencyIndex(of:in:)`, `.hkl(atFrequencyIndex:in:)` | **partial** (0.6.0): the zero-order Laue zone beams of a `Slab`'s exit waves named by the crystal's hkl through the slab's integer supercell matrix (exact integers), at every stored thickness, the one pixel a reflection falls in (abTEM's default, no `radius`). Pinned (`tools/pins/beam-intensities/pins.py`) against `index_diffraction_spots` with the strained cell of the box on Si [110], Si [111] and Mg [0001], 200 kV, five thicknesses from 2 to 100 nm: hkl sets and pixels exact, intensities within 1e−10 of the incident beam with `.abTEMFloat32` (the exit-wave pin); the forbidden 002 of Si [110] grows from zero. Method: multislice (Cowley and Moodie, Acta Cryst. 10 (1957) 609) as abTEM's (Madsen and Susi, Open Res. Europe 1 (2021) 24). Not offered: `radius` (a disc), `sg_max`, `centering`, orientation matrices, higher-order Laue zone labels (below) | useful |
 | `BaseMeasurements.intensity()` | `Waves.intensity()`, `ComplexField.squaredMagnitude()` | **present** | useful |
 | `BaseMeasurements.real()`, `.imag()` | `ComplexField.real`, `.imaginary` | **partial**: raw arrays, not measurements | useful |
 | `BaseMeasurements.phase()`, `.abs()` | | **missing**: planned: SimulatoCore | useful |
@@ -237,11 +239,13 @@ above.
   (`tools/metal-fft-gain`).
 - The simulation plan (`SimulationPlan`, #91): before a run, the sampling from the largest angle the result needs
   (min(0.05 Å, λ / (3 β)), abTEM's two-thirds antialias band), abTEM's gpts for it rounded up to lengths with factors 2,
-  3 and 5 axis by axis (both samplings at most the rule's), the cutoff angles (about β), slices, steps and FFTs, the GPU memory by the design's table
-  (24 N per batched wave, 4 N per element kernel, 8 N per distinct propagator, 8 N per stored exit) and a time from a
-  measured rate; a plan over 4096², the device's largest buffer or the budget (half of Metal's recommended working set,
-  at most a quarter of the memory) is refused with a coarser sampling that fits. The memory model is not yet checked
-  against measured peaks (#92).
+  3 and 5 axis by axis (both samplings at most the rule's), the cutoff angles (about β), slices, steps and FFTs, the GPU
+  memory a cold run peaks at (per wave in a batch 40 N; from the atoms 52 N per element, from built slices 4 N per slice
+  and 16 N; 8 N per distinct propagator and 4 N for the aperture; a probe run's 8 N spectrum and 4 N intensities per
+  wave; 8 N per further stored plane), fitted within 25 % to peaks measured on the reference Mac for HRTEM, CBED and STEM
+  at 256² to 1024² (#92; a warm run peaks at about 0.6 to 0.7 of it), and a time from a measured rate; a plan over 4096²,
+  the device's largest buffer or the budget (half of Metal's recommended working set, at most a quarter of the memory) is
+  refused with a coarser sampling that fits.
 - The CPU batch on up to `ExecutionOptions.maximumCPUThreads` (8 by default) threads, equal to sequential runs (exact today).
 - Progress and cancellation (0.6.0): `Multislice.run`, `Multislice.runBatch` and `STEM.scan` take a `SimulationProgress`
   handler (at most ten calls a second by default, none after a cancel, no fraction while a run prepares) and stop with
@@ -260,6 +264,7 @@ above.
   with the least strain found); coordinates within 1e−6 Å of a face set on it; slices that repeat with the period
   (⌈period / s⌉ per period) and a shift along z of j h / 720 that keeps every atomic plane farthest from a slice boundary
   (0.48 Å on Si [110] with slices of 0.96 Å).
+- Beam intensities by hkl (0.6.0): only beams of the zero-order Laue zone ((V hkl)_z = 0), within the cutoff pattern and |g| at most its largest frequency (abTEM's default `g_max`). abTEM labels each pixel with the indexed reflection of smallest excitation error, which near the first-order Laue ring can be a higher-order reflection that projects onto the same pixel; the kit names the pixel by its zero-order hkl (the value is the same pixel). abTEM's default `sg_max` (`estimate_necessary_excitation_error`) leaves zero-order beams beyond about √(2 g_max) unindexed; the pin passes λ g_max² / 2 so every one is. The pinned cases have no pixel where the two labels differ.
 ## Known limits and decisions
 
 Open work is in the [issues](https://github.com/EMSuite/SimulatoKit/issues), including the ones closed as *not planned*

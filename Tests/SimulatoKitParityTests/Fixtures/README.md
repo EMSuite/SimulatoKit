@@ -20,6 +20,7 @@ GPL-3.0-only licence. No fixture is measured data, and the text fixtures carry n
 | `slice-2-arrays.bin` | 1.4 MB | `tools/pins/stem-detectors/pins.py` | |
 | `slice-3-pins.json` | 7.2 KB | `tools/pins/ctf/pins.py` | CTF kernels and HRTEM images |
 | `slice-3-arrays.bin` | 1.5 MB | `tools/pins/ctf/pins.py` | |
+| `ctf-profiles-pins.json` | 139.3 KB | `tools/pins/ctf-profiles/pins.py` | CTF radial profiles and the CTF's own Scherzer defocus, point resolution and crossover angle |
 | `hrtem-series-pins.json` | 4.6 KB | `tools/pins/hrtem-series/pins.py` | HRTEM image series over defocus and exit planes, one tiled |
 | `hrtem-series-arrays.bin` | 1.3 MB | `tools/pins/hrtem-series/pins.py` | |
 | `slice-4-pins.json` | 2.6 KB | `tools/pins/sampling-tilt/pins.py` | any grid size, `Potential(sampling:)`, beam tilt |
@@ -34,6 +35,7 @@ GPL-3.0-only licence. No fixture is measured data, and the text fixtures carry n
 | `icom-arrays.bin` | 41.6 KB | `tools/pins/icom/pins.py` | |
 | `slab-pins.json` | 199.0 KB | `tools/pins/slab/pins.py` | orthogonal units along zone axes, the repetition ladder, the Si [110] slab |
 | `slab-arrays.bin` | 92.2 KB | `tools/pins/slab/pins.py` | |
+| `beam-intensities-pins.json` | 90.1 KB | `tools/pins/beam-intensities/pins.py` | beam intensities by hkl at five thicknesses: Si [110], Si [111], Mg [0001]; the thin Si [110] 002 series |
 | `kirkland-pins.json` | 127.5 KB | `tools/pins/kirkland/pins.py` | the Kirkland parameterisation: f(k²) for Z = 1 to 103, single atoms, the Si [110] slab's exit wave |
 | `kirkland-arrays.bin` | 183.8 KB | `tools/pins/kirkland/pins.py` | (the generator also writes `Sources/SimulatoMultislice/KirklandTable.swift`) |
 | `thermal-sites-pins.json` | 19.7 KB | `tools/pins/thermal-sites/pins.py` | frozen phonons with σ per element and per site (Si, SrTiO₃), σ ↔ B |

@@ -39,6 +39,7 @@ committed fixtures were written on a Mac; Linux reproduces them to float noise (
 | `pins/potential-multislice/pins.py` | `slice-1-pins.json`, `slice-1-arrays.bin`, `Sources/SimulatoMultislice/LobatoTable.swift` |
 | `pins/stem-detectors/pins.py` | `slice-2-pins.json`, `slice-2-arrays.bin` (imports `potential-multislice`) |
 | `pins/ctf/pins.py` | `slice-3-pins.json`, `slice-3-arrays.bin` (imports `potential-multislice`) |
+| `pins/ctf-profiles/pins.py` | `ctf-profiles-pins.json` (imports `ctf`'s formulas) |
 | `pins/hrtem-series/pins.py` | `hrtem-series-pins.json`, `hrtem-series-arrays.bin` (imports `potential-multislice` and `ctf`) |
 | `pins/sampling-tilt/pins.py` | `slice-4-pins.json`, `slice-4-arrays.bin` |
 | `pins/scan-patterns/pins.py` | `slice-4-scan-pins.json`, `slice-4-scan-arrays.bin` |
@@ -46,6 +47,7 @@ committed fixtures were written on a Mac; Linux reproduces them to float noise (
 | `pins/linescan/pins.py` | `linescan-pins.json`, `linescan-arrays.bin` |
 | `pins/icom/pins.py` | `icom-pins.json`, `icom-arrays.bin` |
 | `pins/slab/pins.py` | `slab-pins.json`, `slab-arrays.bin` |
+| `pins/beam-intensities/pins.py` | `beam-intensities-pins.json` (imports `slab`'s rules) |
 | `pins/kirkland/pins.py` | `kirkland-pins.json`, `kirkland-arrays.bin`, `Sources/SimulatoMultislice/KirklandTable.swift` (reads `slab-pins.json`, so runs after `slab`) |
 | `pins/thermal-sites/pins.py` | `thermal-sites-pins.json`, `thermal-sites-arrays.bin` (imports `potential-multislice`) |
 | `pins/potential-project-tile/pins.py` | none: prints the numbers `SimulatoMultisliceTests/PotentialProjectTileTests.swift` holds inline |
