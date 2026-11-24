@@ -55,7 +55,7 @@ public typealias SimulationProgressHandler = @Sendable (SimulationProgress) -> V
 
 /// Calls a progress handler at most once per `interval` (the first call always), and never once the current task is
 /// cancelled.
-package struct ProgressReporter {
+package struct SimulationProgressReporter {
     let handler: SimulationProgressHandler?
     let interval: Duration
     let now: () -> ContinuousClock.Instant
