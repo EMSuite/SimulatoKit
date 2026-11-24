@@ -63,7 +63,8 @@ Names checked against the sources and `docs/parity.md` (which lists every abTEM 
 | `dp.center_of_mass()`, `dp.gaussian_source_size(s)`, `.poisson_noise(...)` | `CenterOfMassDetector`, `ScanMeasurement.gaussianSourceSize(...)`, `.poissonNoise(...)` |
 | `probe.scan(potential, scan, detectors)` | `STEM.scan(probe:potentials:scan:detectors:backend:)` |
 | `AnnularDetector`, `PixelatedDetector`, `SegmentedDetector` | the same names, with labelled initialisers |
-| `FrozenPhonons(atoms, num_configs, sigmas, seed)` | `FrozenPhonons(structure:sigmas:configurations:seed:directions:)` |
+| `FrozenPhonons(atoms, num_configs, sigmas, seed)` | `FrozenPhonons(structure:sigmas:configurations:seed:directions:)` (σ per element), `FrozenPhonons(structure:siteSigmas:configurations:seed:directions:)` (σ per site) |
+| `sigma_to_B(σ)`, `B_to_sigma(B)` | `FrozenPhonons.bFactor(sigma:)`, `FrozenPhonons.sigma(bFactor:)` |
 
 ## Platform
 
@@ -190,7 +191,7 @@ Numbers are held to the Python reference within its own tolerance; `docs/parity.
 
 
 - Nothing is validated against a micrograph. Partial coherence is abTEM's envelope approximation; there is no detector
-  response; the only noise is `ScanMeasurement.poissonNoise` (the kit's own generator, not NumPy's stream). Frozen phonons use Einstein σ given by the caller, and agree with abTEM exactly only when abTEM's
+  response; the only noise is `ScanMeasurement.poissonNoise` (the kit's own generator, not NumPy's stream). Frozen phonons use Einstein σ given by the caller (per element or per site), and agree with abTEM exactly only when abTEM's
   displacements are supplied (otherwise in distribution).
 - Metal's float32 FFT is not exactly unitary (it loses about 8e−7 of the total intensity per slice; a per-step
   renormalisation brings that to 5e−7 or less); the Metal bounds are registered to 100 slices, and past 300 slices the

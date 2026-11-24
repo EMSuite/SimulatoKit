@@ -1,9 +1,10 @@
 //
 //  FrozenPhonons.swift
 //  Role: the thermal ensemble (abTEM `FrozenPhonons`): configurations of one structure, each atom displaced by a
-//        Gaussian of standard deviation σ_Z along the chosen axes. Displacements are either given (e.g. abTEM's, from
-//        the pins) or drawn by the kit's own seeded generator (SplitMix64 → xoshiro256**, Box–Muller), tested by its
-//        statistics, not by abTEM's bits. The displaced structure is wrapped by the potential.
+//        Gaussian of standard deviation σ (per element or per site, per axis) along the chosen axes; σ ↔ B = 8π²σ².
+//        Displacements are either given (e.g. abTEM's, from the pins) or drawn by the kit's own seeded generator
+//        (SplitMix64 → xoshiro256**, Box–Muller), tested by its statistics, not by abTEM's bits.
+//        The displaced structure is wrapped by the potential.
 //
 
 import Foundation
@@ -88,31 +89,74 @@ public struct FrozenPhonons: Sendable, Hashable {
         self.displacements = displacements
     }
 
-    /// Displacements drawn by the kit's generator: for configuration c the generator seeded with
-    /// `configurationSeed(seed, c)`, three
-    /// normals per atom in atom order (x, y, z), each axis not in `directions` left at zero, scaled by σ of the atom's Z
-    /// (Å; every element of the structure must have a σ, as abTEM requires; 0 leaves it still).
+    /// Displacements drawn by the kit's generator, σ per element: every atom takes the σ of its Z (Å; every element of
+    /// the structure must have a σ, as abTEM requires; 0 leaves it still). The same ensemble as
+    /// `init(structure:siteSigmas:configurations:seed:directions:)` with `siteSigmas(of:sigmas:)`, to the last bit.
     public init(structure: AtomicStructure, sigmas: [Int: Double], configurations: Int, seed: UInt64,
                 directions: Directions = .all) throws {
-        guard configurations >= 1 else { throw SimulatoError.invalidFrozenPhonons("configurations must be at least 1") }
-        for z in Set(structure.atoms.map(\.atomicNumber)) where sigmas[z] == nil {
-            throw SimulatoError.invalidFrozenPhonons("σ must be given for every element; Z = \(z) has none")
-        }
         for (z, s) in sigmas where !(s.isFinite && s >= 0) {
             throw SimulatoError.invalidFrozenPhonons("σ of Z = \(z) must be finite and non-negative, got \(s)")
         }
+        try self.init(structure: structure, siteSigmas: Self.siteSigmas(of: structure, sigmas: sigmas),
+                      configurations: configurations, seed: seed, directions: directions)
+    }
+
+    /// Displacements drawn by the kit's generator, σ per site (abTEM's `sigmas` given as one value per atom): for
+    /// configuration c the generator seeded with `configurationSeed(seed, c)`, three normals per atom in atom order
+    /// (x, y, z), each axis not in `directions` left at zero, scaled by `siteSigmas[i]` of atom i (Å, the standard
+    /// deviation per axis, so B = 8π²σ²; 0 leaves the atom still).
+    /// - Throws: `invalidFrozenPhonons` when `siteSigmas` does not hold one σ per atom, a σ is negative or not finite,
+    ///   or `configurations` is below 1.
+    public init(structure: AtomicStructure, siteSigmas: [Double], configurations: Int, seed: UInt64,
+                directions: Directions = .all) throws {
+        guard configurations >= 1 else { throw SimulatoError.invalidFrozenPhonons("configurations must be at least 1") }
+        guard siteSigmas.count == structure.atoms.count else {
+            throw SimulatoError.invalidFrozenPhonons("\(siteSigmas.count) σ for \(structure.atoms.count) atoms; give one σ per atom")
+        }
+        for (i, s) in siteSigmas.enumerated() where !(s.isFinite && s >= 0) {
+            throw SimulatoError.invalidFrozenPhonons("σ of atom \(i) must be finite and non-negative, got \(s)")
+        }
+        let dx = directions.contains(.x), dy = directions.contains(.y), dz = directions.contains(.z)
         var all: [[SIMD3<Double>]] = []
+        all.reserveCapacity(configurations)
         for c in 0..<configurations {
             var g = GaussianGenerator(seed: Self.configurationSeed(seed, c))
-            all.append(structure.atoms.map { atom in
-                let r = SIMD3(g.nextNormal(), g.nextNormal(), g.nextNormal())
-                let s = sigmas[atom.atomicNumber] ?? 0
-                return SIMD3(directions.contains(.x) ? s * r.x : 0, directions.contains(.y) ? s * r.y : 0,
-                             directions.contains(.z) ? s * r.z : 0)
-            })
+            var d: [SIMD3<Double>] = []
+            d.reserveCapacity(siteSigmas.count)
+            for s in siteSigmas {
+                let rx = g.nextNormal()
+                let ry = g.nextNormal()
+                let rz = g.nextNormal()
+                d.append(SIMD3(dx ? s * rx : 0, dy ? s * ry : 0, dz ? s * rz : 0))
+            }
+            all.append(d)
         }
         try self.init(structure: structure, displacements: all)
     }
+
+    /// The σ of every atom of `structure` (in its atom order) from a σ per element.
+    /// - Throws: `invalidFrozenPhonons` when an element of the structure has no σ.
+    public static func siteSigmas(of structure: AtomicStructure, sigmas: [Int: Double]) throws -> [Double] {
+        for z in Set(structure.atoms.map(\.atomicNumber)).sorted() where sigmas[z] == nil {
+            throw SimulatoError.invalidFrozenPhonons("σ must be given for every element; Z = \(z) has none")
+        }
+        return structure.atoms.map { sigmas[$0.atomicNumber] ?? 0 }
+    }
+
+    /// The isotropic temperature factor (B-factor) B = 8π²σ² [Å²] of a displacement standard deviation σ per axis [Å]
+    /// (abTEM's `sigma_to_B`, the same arithmetic: 8 · (π · π) · σ²).
+    public static func bFactor(sigma: Double) -> Double {
+        eightPiSquared * (sigma * sigma)
+    }
+
+    /// The displacement standard deviation per axis σ = √(B / 8π²) [Å] of an isotropic temperature factor B [Å²]
+    /// (abTEM's `B_to_sigma`; a negative B gives NaN, as there).
+    public static func sigma(bFactor b: Double) -> Double {
+        (b / eightPiSquared).squareRoot()
+    }
+
+    /// 8π² as abTEM writes it (`8 * np.pi**2`).
+    static let eightPiSquared: Double = 8 * (Double.pi * Double.pi)
 
     public var count: Int { displacements.count }
 
