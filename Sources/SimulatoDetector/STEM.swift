@@ -5,6 +5,7 @@
 //        (abTEM's `ensemble_mean`). The loop itself, which can stop and continue, is `STEMRun`.
 //
 
+import Foundation
 import SimulatoCore
 import SimulatoMultislice
 import SimulatoProbe
@@ -88,6 +89,41 @@ public enum STEM {
         var run = try STEMRun(probe: probe, potentials: potentials, scan: scan, detectors: detectors, backend: backend,
                               options: options)
         return try run.run(progress: progress)
+    }
+
+    /// Half of the physical memory [bytes]: the most a scan's detector sums and positions may take.
+    static var defaultMemoryLimit: Int { Int(ProcessInfo.processInfo.physicalMemory / 2) }
+
+    /// Refuses, before anything is allocated (the positions included), a scan whose detector sums (8 bytes a value at
+    /// every position) and positions (16 bytes each) would take more than `limit` bytes: a pixelated detector over a
+    /// large scan holds every pattern (#61).
+    /// - Throws: `SimulatoError.invalidScan` naming the positions, the values per position and the limit.
+    package static func checkMemory(_ scan: some ScanPattern, detectors: [any Detector], probe: Probe,
+                                    limit: Int = defaultMemoryLimit) throws {
+        var positions = 1, overflow = false
+        for n in scan.shape {
+            let r = positions.multipliedReportingOverflow(by: max(n, 0))
+            positions = r.partialValue
+            overflow = overflow || r.overflow
+        }
+        var values = 0
+        for d in detectors {
+            let count = try d.shape(for: probe.grid, beam: probe.beam).reduce(1) { acc, n in
+                let r = acc.multipliedReportingOverflow(by: max(n, 0))
+                overflow = overflow || r.overflow
+                return r.partialValue
+            }
+            let r = values.addingReportingOverflow(count)
+            values = r.partialValue
+            overflow = overflow || r.overflow
+        }
+        let (perPosition, o1) = values.multipliedReportingOverflow(by: 8)
+        let (withPosition, o2) = perPosition.addingReportingOverflow(16)
+        let (bytes, o3) = positions.multipliedReportingOverflow(by: withPosition)
+        guard !(overflow || o1 || o2 || o3), bytes <= limit else {
+            let positionText = overflow ? "more than \(Int.max)" : "\(positions)"
+            throw SimulatoError.invalidScan("\(positionText) positions with \(values) detector values each need more than the \(limit) bytes allowed (half of the physical memory); scan fewer positions or use a smaller detector")
+        }
     }
 
     /// A custom `ScanPattern` must have one or two axes whose product is its number of positions.
