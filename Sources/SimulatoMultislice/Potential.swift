@@ -79,13 +79,21 @@ public struct Potential: Sendable, Hashable {
         try build().project()
     }
 
+    /// The atoms of every slice, in the structure's order, sorted in one pass (`atoms(inSlice:)` for each slice).
+    package func atomsBySlice() -> [[AtomicStructure.Atom]] {
+        var out = [[AtomicStructure.Atom]](repeating: [], count: sliceCount)
+        for (a, j) in zip(atoms, sliceOfAtom) where out.indices.contains(j) { out[j].append(a) }
+        return out
+    }
+
     /// The projected potential of every slice, on the CPU in float64.
     public func build() throws -> ProjectedPotential {
         let builder = try SliceBuilder(grid: grid, parameterization: parameterization)
         var slices: [PotentialSlice] = []
         slices.reserveCapacity(sliceThicknesses.count)
-        for (j, dz) in sliceThicknesses.enumerated() {
-            slices.append(PotentialSlice(thickness: dz, values: try builder.potential(of: atoms(inSlice: j))))
+        // The atoms sorted into their slices once (filtering every atom for every slice was atoms x slices, #61).
+        for (dz, sliceAtoms) in zip(sliceThicknesses, atomsBySlice()) {
+            slices.append(PotentialSlice(thickness: dz, values: try builder.potential(of: sliceAtoms)))
         }
         return ProjectedPotential(grid: grid, slices: slices, sliceOfAtom: sliceOfAtom)
     }
