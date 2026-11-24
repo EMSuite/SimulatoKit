@@ -70,9 +70,9 @@ struct SimulationPlanTests {
         let n = 16384
         #expect(plan.grid.nx == 128 && plan.grid.ny == 128)
         #expect(plan.sliceCount == 4 && plan.batchSize == 1)
-        #expect(plan.memory.waves == 24 * n && plan.memory.kernels == 8 * n)
-        #expect(plan.memory.propagators == 8 * n && plan.memory.storedExitWaves == 8 * n)
-        #expect(plan.memory.total == 48 * n)
+        #expect(plan.memory.waves == 40 * n && plan.memory.potential == 104 * n)
+        #expect(plan.memory.propagators == 12 * n && plan.memory.scan == 0 && plan.memory.storedExitWaves == 0)
+        #expect(plan.memory.total == 156 * n)
         #expect(plan.largestBufferBytes == 8 * n)
         #expect(plan.propagationSteps == 4 && plan.fftCount == 8)
         #expect(try plan.estimatedSeconds(stepsPerSecond: 2) == 2)
@@ -85,9 +85,15 @@ struct SimulationPlanTests {
         scan.batchBytes = 24 * n * 10
         let s = try SimulationPlan(scan, limits: Self.roomy)
         #expect(s.batchSize == 10)
-        #expect(s.memory.waves == 240 * n && s.memory.kernels == 8 * n)
-        #expect(s.memory.propagators == 8 * n && s.memory.storedExitWaves == 160 * n)
+        #expect(s.memory.waves == 400 * n && s.memory.potential == 104 * n && s.memory.propagators == 12 * n)
+        #expect(s.memory.scan == 48 * n && s.memory.storedExitWaves == 80 * n)
         #expect(s.largestBufferBytes == 80 * n)
+
+        // Uploaded slices: 4 N each and 16 N of workspace, whatever the elements.
+        var uploaded = request
+        uploaded.potential = .slices
+        let u = try SimulationPlan(uploaded, limits: Self.roomy)
+        #expect(u.memory.potential == (4 * 4 + 16) * n && u.memory.total == (40 + 32 + 12) * n)
         #expect(s.propagationSteps == 4 * 100 * 3 && s.fftCount == 2400)
     }
 
@@ -95,7 +101,7 @@ struct SimulationPlanTests {
         let request = SimulationPlan.Request(extent: [12.8, 12.8], thickness: 4, energy: 200e3, largestAngle: 30,
                                              sampling: 0.1, elements: 2)
         let cases: [(SimulationLimits, String)] = [
-            (SimulationLimits(memoryBudget: 500_000, largestBuffer: .max), "budget"),
+            (SimulationLimits(memoryBudget: 2_000_000, largestBuffer: .max), "budget"),
             (SimulationLimits(memoryBudget: .max, largestBuffer: 100_000), "buffer"),
             (SimulationLimits(memoryBudget: .max, largestBuffer: .max, largestGridLength: 100), "grid"),
         ]
@@ -107,7 +113,7 @@ struct SimulationPlanTests {
                 let fits: Double?
                 switch (error, kind) {
                 case (.overBudget(let required, let budget, let s), "budget"):
-                    #expect(required == 48 * 16384 && budget == 500_000)
+                    #expect(required == 156 * 16384 && budget == 2_000_000)
                     fits = s
                 case (.bufferTooLarge(let required, let limit, let s), "buffer"):
                     #expect(required == 8 * 16384 && limit == 100_000)
