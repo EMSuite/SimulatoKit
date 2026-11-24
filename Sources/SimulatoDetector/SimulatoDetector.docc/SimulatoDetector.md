@@ -25,6 +25,7 @@ Detectors for scanned-probe simulations and the STEM driver that applies them ov
 - ``AnnularDetector``
 - ``PixelatedDetector``
 - ``SegmentedDetector``
+- ``FlexibleAnnularDetector``
 - ``CenterOfMassDetector``
 - ``WavesDetector``
 - ``ScanWaves``

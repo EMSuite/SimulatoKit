@@ -103,9 +103,18 @@ public struct AnnularDetector: Detector, Hashable {
 
     /// The outer angle used on this intensity, refused beyond the pattern's maximum angle (abTEM's check).
     public func outerAngle(_ p: DiffractionIntensity) throws -> Double {
-        let a = p.angularSampling
-        let maximum = min(Double(p.grid.nx / 2) * a.x, Double(p.grid.ny / 2) * a.y)
-        guard let o = outer else { let c = p.cutoffAngles; return floor(min(c.x, c.y)) }
+        try Self.outerAngle(outer, grid: p.grid, beam: p.beam)
+    }
+
+    /// An outer angle on a grid at a beam: `nil` is ⌊min(cutoff angles)⌋; a given angle is refused beyond the pattern's
+    /// maximum angle (abTEM's check).
+    static func outerAngle(_ outer: Double?, grid: Grid, beam: ElectronBeam) throws -> Double {
+        guard let o = outer else {
+            let c = Antialias.cutoffAngles(on: grid, wavelength: beam.wavelength)
+            return floor(min(c.x, c.y))
+        }
+        let a = (grid.reciprocalSamplingX * beam.wavelength * 1e3, grid.reciprocalSamplingY * beam.wavelength * 1e3)
+        let maximum = min(Double(grid.nx / 2) * a.0, Double(grid.ny / 2) * a.1)
         // abTEM: np.isclose(maximum, outer, atol=1e-5), whose default rtol 1e-5 applies to outer (measurements.py 2933).
         if o > maximum && abs(o - maximum) > 1e-5 + 1e-5 * abs(o) {
             throw SimulatoError.invalidDetector("outer \(o) mrad exceeds the maximum simulated angle \(maximum) mrad")
@@ -259,5 +268,59 @@ public struct SegmentedDetector: Detector, Hashable {
             }
         }
         return out
+    }
+}
+
+/// The flexible annular detector (abTEM's `FlexibleAnnularDetector`): the intensity in radial bins of `step` mrad from
+/// `inner` to `outer` at every position, so that any annular range on bin edges (bright field, ABF, ADF, HAADF) is
+/// summed after the run (`ScanMeasurement.integrateRadial(inner:outer:detector:)` with ``segmented(for:beam:)``)
+/// instead of running again. It is a ``SegmentedDetector`` of one azimuthal bin and ⌊outer − inner⌋ / step radial bins
+/// (abTEM's `int(np.floor(outer - inner) / step_size)`), so the bins span inner to outer evenly; the value shape is
+/// `[bins, 1]`. A bin is `step` wide only when (outer − inner) / step is whole; otherwise (the default outer, a cutoff
+/// such as 104.7 mrad) each is (outer − inner) / bins wide, a little more, and `integrateRadial` picks bins by that true
+/// width (abTEM labels and integrates them as `step` wide). Give a whole outer angle to keep bands on bin edges.
+public struct FlexibleAnnularDetector: Detector, Hashable {
+    /// The bin width [mrad] (abTEM's `step_size`).
+    public let step: Double
+    public let inner: Double
+    /// `nil`: min(cutoff angles), not rounded down (abTEM's polar detectors, `_match_waves`; ``AnnularDetector`` floors it).
+    public let outer: Double?
+
+    /// - Throws: `SimulatoError.invalidDetector` for a step that is not finite and positive, a negative or non-finite
+    ///   inner angle, or an outer angle that is not finite and above inner.
+    public init(step: Double = 1, inner: Double = 0, outer: Double? = nil) throws {
+        guard step.isFinite, step > 0 else { throw SimulatoError.invalidDetector("step must be finite and positive, got \(step)") }
+        guard inner.isFinite, inner >= 0 else { throw SimulatoError.invalidDetector("inner must be finite and ≥ 0") }
+        if let o = outer, !(o.isFinite && o > inner) {
+            throw SimulatoError.invalidDetector("outer must be finite and above inner, got \(o)")
+        }
+        self.step = step
+        self.inner = inner
+        self.outer = outer
+    }
+
+    /// The segmented detector the bins are on a grid at a beam: its outer angle resolved and refused beyond the pattern.
+    /// - Throws: `SimulatoError.invalidDetector` when the outer angle exceeds the pattern or leaves no whole bin.
+    public func segmented(for grid: Grid, beam: ElectronBeam) throws -> SegmentedDetector {
+        let o: Double
+        if let given = outer {
+            o = try AnnularDetector.outerAngle(given, grid: grid, beam: beam)
+        } else {
+            let c = Antialias.cutoffAngles(on: grid, wavelength: beam.wavelength)
+            o = min(c.x, c.y)
+        }
+        let bins = (floor(o - inner) / step).rounded(.down)
+        guard bins >= 1, bins <= 1e6 else {
+            throw SimulatoError.invalidDetector("\(inner) to \(o) mrad in steps of \(step) mrad give \(bins) bins; 1 to 1000000 are allowed")
+        }
+        return try SegmentedDetector(radialBins: Int(bins), azimuthalBins: 1, inner: inner, outer: o)
+    }
+
+    public func shape(for grid: Grid, beam: ElectronBeam) throws -> [Int] {
+        try segmented(for: grid, beam: beam).shape(for: grid, beam: beam)
+    }
+
+    public func detect(_ p: DiffractionIntensity) throws -> [Double] {
+        try segmented(for: p.grid, beam: p.beam).detect(p)
     }
 }

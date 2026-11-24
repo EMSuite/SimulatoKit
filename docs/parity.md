@@ -4,8 +4,8 @@ The coverage table of abTEM 1.0.10 (`References/python/abtem`, git `164e644`): i
 the source in `site-packages/abtem` against SimulatoKit. Rewritten for 0.3.0 (the growing phase's kit audit); every row
 has one state and one priority.
 
-**Totals (131 rows): 39 present, 43 partial, 49 missing.** By priority: **study** 27 rows (12 present, 8 partial, 7 missing);
-**useful** 82 (27, 35, 20); **not planned** 22 (all missing, each with its reason).
+**Totals (131 rows): 40 present, 43 partial, 48 missing.** By priority: **study** 27 rows (12 present, 8 partial, 7 missing);
+**useful** 82 (28, 35, 19); **not planned** 22 (all missing, each with its reason).
 
 States:
 
@@ -162,7 +162,7 @@ detector, the Gaussian source size and Poisson noise on a scan.
 | `AnnularDetector(inner, outer, offset)` | `AnnularDetector(inner:outer:)` | **partial**: `offset` not offered; a negative inner is refused (abTEM squares it); `to_cpu`, `url` do not apply | useful |
 | `PixelatedDetector(max_angle, resample, reciprocal_space)` | `PixelatedDetector(maxAngle:)` | **partial**: "cutoff", "valid", "full"; numeric angles, `resample` and real-space detection not offered | useful |
 | `SegmentedDetector(nbins_radial, nbins_azimuthal, inner, outer, rotation, offset)` | `SegmentedDetector(radialBins:azimuthalBins:inner:outer:rotation:)` | **partial**: summed in float64 where abTEM sums in float32; inner = outer refused; `offset` not offered | useful |
-| `FlexibleAnnularDetector(step_size, inner, outer)` | | **missing**: planned: SimulatoDetector | useful |
+| `FlexibleAnnularDetector(step_size, inner, outer)` | `FlexibleAnnularDetector(step:inner:outer:)`, `.segmented(for:beam:)` with `ScanMeasurement.integrateRadial(inner:outer:detector:)` | **present**: radial bins of `step` mrad, ⌊outer − inner⌋ / step of them spanning inner to outer (abTEM's count), one azimuthal bin; value shape `[bins, 1]`; `outer` nil is min(cutoff angles), not floored (abTEM's polar detectors; `AnnularDetector` floors it); a given outer beyond the pattern is refused, as `AnnularDetector`'s. Bins are `step` wide only when (outer − inner) / step is whole, otherwise (outer − inner) / bins wide: abTEM still labels them and integrates by `step`, the kit's `integrateRadial` by the true width (known limit; a whole outer keeps both the same). Pinned (`tools/pins/flexible-annular/pins.py`): a 20 mrad probe at 200 kV over 4 x 4 positions of Si [110] (0 to 120 mrad) and SrTiO₃ [001] (0 to 120 and 30 to 90 mrad), 1 mrad bins, within 3e−7 of the largest bin (abTEM returns the bins as float32 in float64 mode; the bound is float32 rounding); the bins summed between two edges equal the kit's `AnnularDetector` within 1e−12 at every position (the whole range and a band 10 mrad inside it); `.metal` within 2e−4 of the CPU's (the STEM detector tolerance). Method: Madsen and Susi, Open Res. Europe 1 (2021) 24 | useful |
 | `WavesDetector(gpts)` | `WavesDetector(rows:columns:)`, `STEM.scan(probe:potentials:scan:detector:)` returning `ScanWaves` | **present**: the exit wave per position, `gpts` as a Fourier crop or pad; pinned at 1.8e-15 of the maximum on a 3 x 2 scan, six `gpts` (crop, pad, mixed, odd, even), `.metal` at 3.6e-7 against `.cpu`; frozen phonons through `STEM.scanFrozenPhonons`, one `ScanWaves` per configuration (abTEM keeps the configuration axis for waves; `STEM.scan` refuses a list), each equal to its single-potential scan bit for bit; refuses above half of the physical memory, counted over all configurations; `to_cpu`, `url` do not apply | study |
 | `BaseDetector.detect(waves)`, `.angular_limits` | `Detector.detect(_:)` on a `DiffractionIntensity`, `.shape(for:beam:)` | **present** | useful |
 | `AnnularDetector.get_detector_region`, `get_detector_regions`, `.show` | | **missing**: not planned: plotting | not planned |
