@@ -231,7 +231,7 @@ failure of the Metal path, never a tolerance to widen. `MetalAccuracy.registered
 
 Execution choices are parameters (`ExecutionOptions`, passed as `options:`; 0.2.0):
 threads, Metal batch memory and shapes, the CPU scan chunk, the renormalisation, the executable cache, the progress interval
-(0.6.0). abTEM's nearest counterparts are its `max_batch`, `pbar` and dask settings, which are not counted as missing options
+(0.6.0), the Metal transmission cache (#122). abTEM's nearest counterparts are its `max_batch`, `pbar` and dask settings, which are not counted as missing options
 above.
 
 ## Not abTEM's, SimulatoKit's own
@@ -248,6 +248,14 @@ above.
   the device's largest buffer or the budget (half of Metal's recommended working set, at most a quarter of the memory) is
   refused with a coarser sampling that fits.
 - The CPU batch on up to `ExecutionOptions.maximumCPUThreads` (8 by default) threads, equal to sequential runs (exact today).
+- Slices that repeat are built once (#122). Two slices with the same atoms (atomic number, x and y, in order; the
+  infinite projection reads nothing else) share one potential and one transmission function, bit for bit on `.cpu`; a
+  `ProjectedPotential` carries that grouping from `Potential.build()` (slices made elsewhere are all taken as distinct,
+  nothing is compared). On `.metal` each distinct slice's transmission is made once at preparation and kept (8 N each, up to
+  `ExecutionOptions.metalTransmissionCacheBytes`, 1 GiB by default), within `MetalAccuracy.registered` of a run that
+  builds it in every step; a run with more distinct slices than fit builds them in every step, and `SimulationPlan` says
+  which (`cachesTransmissions`, `Memory.transmissionCache`). A crystal slab repeats its slices every period; a
+  frozen-phonon configuration repeats none.
 - Progress and cancellation (0.6.0): `Multislice.run`, `Multislice.runBatch` and `STEM.scan` take a `SimulationProgress`
   handler (at most ten calls a second by default, none after a cancel, no fraction while a run prepares) and stop with
   `CancellationError` after the slice (`.cpu`) or chunk of about 50 to 150 ms (`.metal`) under way; a Metal run takes the
