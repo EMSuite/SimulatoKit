@@ -236,11 +236,13 @@ above.
   (`tools/metal-fft-gain`).
 - The simulation plan (`SimulationPlan`, #91): before a run, the sampling from the largest angle the result needs
   (min(0.05 Å, λ / (3 β)), abTEM's two-thirds antialias band), abTEM's gpts for it rounded up to lengths with factors 2,
-  3 and 5 axis by axis (both samplings at most the rule's), the cutoff angles (about β), slices, steps and FFTs, the GPU memory by the design's table
-  (24 N per batched wave, 4 N per element kernel, 8 N per distinct propagator, 8 N per stored exit) and a time from a
-  measured rate; a plan over 4096², the device's largest buffer or the budget (half of Metal's recommended working set,
-  at most a quarter of the memory) is refused with a coarser sampling that fits. The memory model is not yet checked
-  against measured peaks (#92).
+  3 and 5 axis by axis (both samplings at most the rule's), the cutoff angles (about β), slices, steps and FFTs, the GPU
+  memory a cold run peaks at (per wave in a batch 40 N; from the atoms 52 N per element, from built slices 4 N per slice
+  and 16 N; 8 N per distinct propagator and 4 N for the aperture; a probe run's 8 N spectrum and 4 N intensities per
+  wave; 8 N per further stored plane), fitted within 25 % to peaks measured on the reference Mac for HRTEM, CBED and STEM
+  at 256² to 1024² (#92; a warm run peaks at about 0.6 to 0.7 of it), and a time from a measured rate; a plan over 4096²,
+  the device's largest buffer or the budget (half of Metal's recommended working set, at most a quarter of the memory) is
+  refused with a coarser sampling that fits.
 - The CPU batch on up to `ExecutionOptions.maximumCPUThreads` (8 by default) threads, equal to sequential runs (exact today).
 - Progress and cancellation (0.6.0): `Multislice.run`, `Multislice.runBatch` and `STEM.scan` take a `SimulationProgress`
   handler (at most ten calls a second by default, none after a cancel, no fraction while a run prepares) and stop with
