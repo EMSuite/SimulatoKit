@@ -17,6 +17,8 @@ public enum ImageOperationError: Error, Sendable, Equatable, CustomStringConvert
     case invalidDisc(String)
     /// `Border.raise` and the disc crosses the image border.
     case discOutsideImage
+    /// A Gaussian filter's standard deviation that is negative or not finite (x, y in Å).
+    case invalidSigma(Double, Double)
 
     public var description: String {
         switch self {
@@ -24,6 +26,7 @@ public enum ImageOperationError: Error, Sendable, Equatable, CustomStringConvert
         case .invalidRepetitions(let x, let y): return "repetitions must be at least 1 along both axes and give at most 2^28 values, got (\(x), \(y))"
         case .invalidDisc(let why): return "invalid integration disc: \(why)"
         case .discOutsideImage: return "the integration region is outside the image"
+        case .invalidSigma(let x, let y): return "a Gaussian filter's sigma must be finite and at least 0 Å, got (\(x), \(y))"
         }
     }
 }
