@@ -162,10 +162,14 @@ final class SliceBuilder {
     /// V of one slice from its (wrapped) atoms: elements in increasing Z, each Re(IFFT(FFT(deltas) · f / S)).
     func potential(of atoms: [AtomicStructure.Atom]) throws -> [Double] {
         var v = [Double](repeating: 0, count: grid.count)
-        let numbers = Set(atoms.map(\.atomicNumber)).sorted()
-        for z in numbers {
-            let positions = atoms.filter { $0.atomicNumber == z }.map { SIMD2($0.position.x / grid.samplingX,
-                                                                                $0.position.y / grid.samplingY) }
+        // The positions grouped by element in one pass, each group in the atoms' order.
+        var byElement: [Int: [SIMD2<Double>]] = [:]
+        for atom in atoms {
+            byElement[atom.atomicNumber, default: []].append(SIMD2(atom.position.x / grid.samplingX,
+                                                                   atom.position.y / grid.samplingY))
+        }
+        for z in byElement.keys.sorted() {
+            let positions = byElement[z]!
             var field = ComplexField(nx: grid.nx, ny: grid.ny)
             Self.superposeDeltas(positions, into: &field.real, nx: grid.nx, ny: grid.ny)
             fft.forward(&field)
