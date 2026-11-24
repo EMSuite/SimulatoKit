@@ -159,4 +159,30 @@ struct SlabBuilderTests {
         }
         await #expect(throws: CancellationError.self) { try await task.value }
     }
+
+    /// A model's slab is the crystal's slab (#121): Al's conventional cell as a model, the beam along z, gives the slab of Al down
+    /// [0 0 1] (the zone frame is the identity there) at every thickness and lateral size, atom for atom; with no thickness it is
+    /// one period (a padded model is never stacked); a bad box is refused the same way.
+    @Test func aModelsSlabIsTheCrystalsSlab() throws {
+        let a = 4.05
+        let model = try CrystalCell(cellRows: [SIMD3(a, 0, 0), SIMD3(0, a, 0), SIMD3(0, 0, a)], atomicNumbers: [13, 13, 13, 13],
+                                    positions: Self.fcc.map { $0.fractional * a })
+        for (lateral, thickness) in [(nil, 20.0), (SIMD2(12.0, 9.0), 41.0)] as [(SIMD2<Double>?, Double)] {
+            let fromModel = try SlabBuilder.slab(ofModel: model, lateralSize: lateral, thickness: thickness)
+            let fromCrystal = try SlabBuilder.slab(of: aluminium(), zoneAxis: SIMD3(0, 0, 1), lateralSize: lateral, thickness: thickness)
+            #expect(fromModel.repeats == fromCrystal.repeats)
+            #expect(fromModel.sliceThicknesses == fromCrystal.sliceThicknesses)
+            #expect(fromModel.structure.atoms.count == fromCrystal.structure.atoms.count)
+            #expect(fromModel.structure.box == fromCrystal.structure.box)
+            #expect(fromModel.zShift == fromCrystal.zShift)
+            func key(_ a: AtomicStructure.Atom) -> [Double] { [a.position.z, a.position.y, a.position.x].map { ($0 * 1e6).rounded() } }
+            let m = fromModel.structure.atoms.map(key).sorted { $0.lexicographicallyPrecedes($1) }
+            let c = fromCrystal.structure.atoms.map(key).sorted { $0.lexicographicallyPrecedes($1) }
+            #expect(m == c, "the cut and the shift are the crystal's")
+        }
+        let onePeriod = try SlabBuilder.slab(ofModel: model)
+        #expect(onePeriod.repeats == SIMD3(1, 1, 1))
+        #expect(throws: SimulatoError.self) { try SlabBuilder.slab(ofModel: model, thickness: 0) }
+        #expect(throws: SimulatoError.self) { try SlabBuilder.slab(ofModel: model, sliceThickness: -1) }
+    }
 }

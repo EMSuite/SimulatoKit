@@ -182,6 +182,14 @@ public enum SlabBuilder {
         }
         guard sliceThickness.isFinite, sliceThickness > 0 else { throw SimulatoError.invalidSliceThickness(sliceThickness) }
         let unit = try orthogonalUnit(of: cell, zoneAxis: zoneAxis, maximumStrain: maximumStrain)
+        return try slab(of: unit, lateral: lateral, thickness: thickness, sliceThickness: sliceThickness, maximumAtomCount: maximumAtomCount)
+    }
+
+    /// The slab of `unit` (inputs already checked): repeated to at least `lateral` in x and y, to the whole number of periods
+    /// nearest `thickness`, cut and shifted as ``slab(of:zoneAxis:lateralSize:thickness:sliceThickness:maximumStrain:maximumAtomCount:)``
+    /// says.
+    static func slab(of unit: OrthogonalUnit, lateral: SIMD2<Double>, thickness: Double, sliceThickness: Double,
+                     maximumAtomCount: Int) throws -> Slab {
         let box = unit.structure.box
         func count(_ want: Double, _ side: Double) -> Double { max(1, (want / side - 1e-9).rounded(.up)) }
         let n = SIMD3(count(lateral.x, box.x), count(lateral.y, box.y),

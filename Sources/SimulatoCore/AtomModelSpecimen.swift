@@ -110,4 +110,29 @@ extension SlabBuilder {
         try checkOccupancy(model)
         return try ladder(model, rotation: axis.rotation, maximumStrain: maximumStrain)
     }
+
+    /// A slab of an atom model (``orthogonalUnit(ofModel:beamAlong:maximumStrain:)``), as
+    /// ``slab(of:zoneAxis:lateralSize:thickness:sliceThickness:maximumStrain:maximumAtomCount:)`` makes one of a crystal: the unit
+    /// repeated to at least `lateralSize` in x and y (one unit when nil), along the beam to the whole number of periods nearest
+    /// `thickness` (at least one), or one period when nil, cut in equal slices of at most `sliceThickness` per period, shifted
+    /// along z so no atomic plane sits on a slice boundary. Box z is depth below the entrance face.
+    ///
+    /// Give `thickness` only for a model that is periodic along the beam (a cell of a crystal or a bicrystal). A model padded with
+    /// vacuum (``CrystalCell/padded(atomicNumbers:positions:box:vacuum:axes:occupancies:)``, a particle) is one period as it
+    /// stands: repeating it would stack copies with their vacuum between them.
+    /// - Throws: `SimulatoError.invalidBox` for a lateral size or thickness that is not finite and positive;
+    ///   `invalidSliceThickness`; `tooManyAtoms` above `maximumAtomCount`; the refusals of the unit.
+    public static func slab(ofModel model: CrystalCell, beamAlong axis: BeamAxis = .z, lateralSize: SIMD2<Double>? = nil,
+                            thickness: Double? = nil, sliceThickness: Double = 1,
+                            maximumStrain: Double = defaultMaximumStrain,
+                            maximumAtomCount: Int = defaultMaximumAtomCount) throws -> Slab {
+        let lateral = lateralSize ?? SIMD2(0, 0)
+        guard thickness.map({ $0.isFinite && $0 > 0 }) ?? true, lateral.x.isFinite, lateral.y.isFinite, lateral.x >= 0, lateral.y >= 0 else {
+            throw SimulatoError.invalidBox(lateral.x, lateral.y, thickness ?? .nan)
+        }
+        guard sliceThickness.isFinite, sliceThickness > 0 else { throw SimulatoError.invalidSliceThickness(sliceThickness) }
+        let unit = try orthogonalUnit(ofModel: model, beamAlong: axis, maximumStrain: maximumStrain)
+        return try slab(of: unit, lateral: lateral, thickness: thickness ?? unit.structure.box.z, sliceThickness: sliceThickness,
+                        maximumAtomCount: maximumAtomCount)
+    }
 }
