@@ -3,7 +3,7 @@
 Every committed fixture of the kit lives in this folder and is read by `SimulatoKitParityTests` (the target excludes the
 folder from its sources; the tests open the files by path). Each `*-pins.json` holds the scalars, shapes, versions and the
 index into its `*-arrays.bin` sidecar (float64 little-endian, complex as interleaved re, im), whose sha256 the JSON records.
-24 files, 21.8 MB.
+26 files, 22.0 MB.
 
 Every file is regenerated in place by the generator named in its row, from the repo root with the environment in
 `tools/README.md`: `.venv/bin/python -I -B tools/pins/<subject>/pins.py`. A regeneration that changes an `*-arrays.bin`
