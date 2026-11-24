@@ -36,7 +36,7 @@ let package = Package(
         .target(name: "SimulatoMultislice", dependencies: ["SimulatoCore"], swiftSettings: settings),
         // The soft aperture, the polar aberrations C10 ... C56 and the probe at a position, grid and line scans, the CTF
         // with its envelopes and the closed forms, applied to waves for HRTEM images.
-        .target(name: "SimulatoProbe", dependencies: ["SimulatoCore"], swiftSettings: settings),
+        .target(name: "SimulatoProbe", dependencies: ["SimulatoCore", "SimulatoMultislice"], swiftSettings: settings),
         // Annular (BF, ADF, HAADF), pixelated, segmented, centre-of-mass and waves detectors and the STEM driver, averaged
         // over frozen-phonon configurations; line profiles and integrated centre of mass.
         .target(name: "SimulatoDetector", dependencies: ["SimulatoCore", "SimulatoMultislice", "SimulatoProbe"],
@@ -52,7 +52,8 @@ let package = Package(
         .testTarget(name: "SimulatoMultisliceTests",
                     dependencies: ["SimulatoMultislice", "SimulatoProbe", "SimulatoCore", "SimulatoKitTestSupport"],
                     swiftSettings: settings),
-        .testTarget(name: "SimulatoProbeTests", dependencies: ["SimulatoProbe", "SimulatoCore"], swiftSettings: settings),
+        .testTarget(name: "SimulatoProbeTests", dependencies: ["SimulatoProbe", "SimulatoMultislice", "SimulatoCore"],
+                    swiftSettings: settings),
         // The detectors, line scans and iCOM by truths and refusals that need no fixture: the fast half of the detector tests.
         .testTarget(name: "SimulatoDetectorTests",
                     dependencies: ["SimulatoDetector", "SimulatoProbe", "SimulatoMultislice", "SimulatoCore", "SimulatoKitTestSupport"],

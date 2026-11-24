@@ -85,27 +85,36 @@ extension RealField {
             }
         }
 
-        var out = [Double](repeating: 0, count: rings)
+        // Each pixel adds to the rings near its radius only (#61: was every ring over every pixel). A ring still sums its
+        // pixels in index order with the same test and weight, so the result is bit for bit the full double loop's.
+        var weights = [Double](repeating: 0, count: rings), sums = [Double](repeating: 0, count: rings)
         let gaussianScale = w * w / 2
-        for i in 0..<rings {
-            let center = Double(i) * step
-            var weight = 0.0, sum = 0.0
-            switch weighting {
-            case .step:
-                for k in radius.indices where abs(radius[k] - center) < w {
-                    weight += 1
-                    sum += values[k]
-                }
-            case .gaussian:
-                for k in radius.indices {
-                    let d = radius[k] - center
+        // exp(−x) is exactly 0 in float64 beyond x = 746, so those pixels add exactly 0; a non-finite value would add
+        // NaN even there, so such a pattern keeps every ring.
+        let reach = weighting == .step ? w : (746 * gaussianScale).squareRoot()
+        let everyRing = weighting == .gaussian && !values.allSatisfy(\.isFinite)
+        for k in radius.indices {
+            let r = radius[k]
+            let first = everyRing ? 0 : Swift.max(0, Int(Swift.max(-1, ((r - reach) / step).rounded(.down))) - 1)
+            let last = everyRing ? rings - 1 : Swift.min(rings - 1, Int(Swift.min(Double(rings), ((r + reach) / step).rounded(.up))) + 1)
+            guard first <= last else { continue }
+            for i in first...last {
+                let center = Double(i) * step
+                switch weighting {
+                case .step:
+                    if abs(r - center) < w {
+                        weights[i] += 1
+                        sums[i] += values[k]
+                    }
+                case .gaussian:
+                    let d = r - center
                     let m = exp(-(d * d) / gaussianScale)
-                    weight += m
-                    sum += values[k] * m
+                    weights[i] += m
+                    sums[i] += values[k] * m
                 }
             }
-            out[i] = weight > 0 ? sum / weight : 0
         }
+        let out = (0..<rings).map { weights[$0] > 0 ? sums[$0] / weights[$0] : 0 }
         return try ReciprocalSpaceLineProfiles(count: rings, values: out, sampling: step / (wavelength * 1e3))
     }
 }

@@ -3,7 +3,7 @@
 Every committed fixture of the kit lives in this folder and is read by `SimulatoKitParityTests` (the target excludes the
 folder from its sources; the tests open the files by path). Each `*-pins.json` holds the scalars, shapes, versions and the
 index into its `*-arrays.bin` sidecar (float64 little-endian, complex as interleaved re, im), whose sha256 the JSON records.
-26 files, 22.0 MB.
+30 files, 22.3 MB.
 
 Every file is regenerated in place by the generator named in its row, from the repo root with the environment in
 `tools/README.md`: `.venv/bin/python -I -B tools/pins/<subject>/pins.py`. A regeneration that changes an `*-arrays.bin`
@@ -40,5 +40,9 @@ GPL-3.0-only licence. No fixture is measured data, and the text fixtures carry n
 | `kirkland-arrays.bin` | 183.8 KB | `tools/pins/kirkland/pins.py` | (the generator also writes `Sources/SimulatoMultislice/KirklandTable.swift`) |
 | `thermal-sites-pins.json` | 19.7 KB | `tools/pins/thermal-sites/pins.py` | frozen phonons with σ per element and per site (Si, SrTiO₃), σ ↔ B |
 | `thermal-sites-arrays.bin` | 1.0 MB | `tools/pins/thermal-sites/pins.py` | |
+| `flexible-annular-pins.json` | 14.2 KB | `tools/pins/flexible-annular/pins.py` | `FlexibleAnnularDetector` (1 mrad bins) on a 4 x 4 scan of Si [110] and SrTiO₃ [001], and `AnnularDetector` of the same limits |
+| `flexible-annular-arrays.bin` | 38.6 KB | `tools/pins/flexible-annular/pins.py` | (bins are float32 in abTEM 1.0.10) |
+| `cbed-series-pins.json` | 4.2 KB | `tools/pins/cbed-series/pins.py` | CBED thickness series: a 10 mrad probe through Si [110] and Al [001], exit planes at 20, 50 and 100 nm, pixelated patterns |
+| `cbed-series-arrays.bin` | 206.0 KB | `tools/pins/cbed-series/pins.py` | |
 
 The file names keep the development slice they were written in (`slice-N`); the tests open them by these names.
