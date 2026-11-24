@@ -124,6 +124,11 @@ struct AzimuthalAverageTests {
         }
     }
 
+    /// (radial sampling, width, maximum angle) cases.
+    static let ringCases: [(Double, Double, Double?)] = [
+        (1.0, 1.0, nil), (0.7, 1.5, 30.0), (2.3, 0.4, nil), (1.0, 12.0, 40.0), (0.5, 3.0, nil),
+    ]
+
     @Test func perPixelRingsEqualEveryRingOverEveryPixelBitForBit() throws {
         // A 64 x 48 pattern with signed values, anisotropic sampling.
         let values: [Double] = (0..<(64 * 48)).map { (k: Int) -> Double in
@@ -132,8 +137,7 @@ struct AzimuthalAverageTests {
         }
         let p = RealField.unchecked(nx: 64, ny: 48, values: values, samplingX: 0.05, samplingY: 0.061)
         for weighting in [AzimuthalWeighting.step, .gaussian] {
-            for (sampling, width, maxAngle) in [(1.0, 1.0, nil), (0.7, 1.5, 30.0), (2.3, 0.4, nil), (1.0, 12.0, 40.0),
-                                                (0.5, 3.0, nil)] as [(Double, Double, Double?)] {
+            for (sampling, width, maxAngle) in Self.ringCases {
                 let a = try p.azimuthalAverage(beam: Self.beam, maxAngle: maxAngle, radialSampling: sampling,
                                                weighting: weighting, width: width)
                 let b = Self.everyRingOverEveryPixel(p, maxAngle: maxAngle, radialSampling: sampling,
