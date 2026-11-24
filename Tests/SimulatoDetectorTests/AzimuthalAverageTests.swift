@@ -150,6 +150,7 @@ struct AzimuthalAverageTests {
         bad[5] = .nan
         let q = RealField.unchecked(nx: 64, ny: 48, values: bad, samplingX: 0.05, samplingY: 0.061)
         let g = try q.azimuthalAverage(beam: Self.beam, weighting: .gaussian)
-        #expect(g.values.allSatisfy(\.isNaN))
+        let allNaN = g.values.allSatisfy { $0.isNaN }
+        #expect(allNaN)
     }
 }
