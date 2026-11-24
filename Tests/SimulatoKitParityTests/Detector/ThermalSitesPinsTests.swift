@@ -116,7 +116,8 @@ struct ThermalSitesPinsTests {
             let site = ThermalPins.doubles("\(id).site_sigmas")
             #expect(site.count == s.atoms.count)
             let first = s.atoms[0].atomicNumber
-            let ofFirst = Set(zip(s.atoms, site).filter { $0.0.atomicNumber == first }.map { $0.1 })
+            var ofFirst = Set<Double>()
+            for (atom, sigma) in zip(s.atoms, site) where atom.atomicNumber == first { ofFirst.insert(sigma) }
             #expect(ofFirst.count > 1, "\(id): one element carries several σ")
             // The kit's own generator takes them.
             let fp = try FrozenPhonons(structure: s, siteSigmas: site, configurations: 2, seed: 1)

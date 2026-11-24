@@ -35,8 +35,9 @@ struct SiteSigmaTests {
     /// the σ of another site they fail; the still site stays at zero.
     @Test func everySitePassesKSAtItsOwnSigma() throws {
         let sigmas = [0.05, 0.08, 0.12, 0.0]
-        let atoms = sigmas.indices.map {
-            AtomicStructure.Atom(atomicNumber: 14, position: SIMD3(1 + Double($0), 2, 3))
+        var atoms: [AtomicStructure.Atom] = []
+        for i in sigmas.indices {
+            atoms.append(AtomicStructure.Atom(atomicNumber: 14, position: SIMD3<Double>(1 + Double(i), 2, 3)))
         }
         let s = try AtomicStructure(box: SIMD3(8, 8, 8), atoms: atoms)
         let fp = try FrozenPhonons(structure: s, siteSigmas: sigmas, configurations: 2000, seed: 2026)
@@ -64,9 +65,12 @@ struct SiteSigmaTests {
     @Test func sigmaFollowsTheSiteNotTheElement() throws {
         let n = 12_000
         let ladder = [0.04, 0.07, 0.11]
-        let atoms = (0..<n).map {
-            AtomicStructure.Atom(atomicNumber: $0 % 2 == 0 ? 8 : 22,
-                                 position: SIMD3(Double($0 % 100) * 0.1, Double($0 / 100) * 0.08, 1))
+        var atoms: [AtomicStructure.Atom] = []
+        for i in 0..<n {
+            let z: Int = i % 2 == 0 ? 8 : 22
+            let x = Double(i % 100) * 0.1
+            let y = Double(i / 100) * 0.08
+            atoms.append(AtomicStructure.Atom(atomicNumber: z, position: SIMD3<Double>(x, y, 1)))
         }
         let s = try AtomicStructure(box: SIMD3(10, 10, 10), atoms: atoms)
         let siteSigmas = (0..<n).map { ladder[$0 % 3] }
@@ -86,8 +90,12 @@ struct SiteSigmaTests {
 
     /// σ per element is σ per site at each element's σ, to the last bit, for every choice of directions.
     @Test func perElementIsPerSiteToTheLastBit() throws {
-        let atoms = (0..<60).map {
-            AtomicStructure.Atom(atomicNumber: [38, 22, 8, 8, 8][$0 % 5], position: SIMD3(Double($0 % 6), Double($0 / 6) * 0.7, 1.5))
+        let species: [Int] = [38, 22, 8, 8, 8]
+        var atoms: [AtomicStructure.Atom] = []
+        for i in 0..<60 {
+            let x = Double(i % 6)
+            let y = Double(i / 6) * 0.7
+            atoms.append(AtomicStructure.Atom(atomicNumber: species[i % 5], position: SIMD3<Double>(x, y, 1.5)))
         }
         let s = try AtomicStructure(box: SIMD3(8, 8, 4), atoms: atoms)
         let bySpecies: [Int: Double] = [38: 0.08, 22: 0.06, 8: 0.07]
@@ -105,7 +113,9 @@ struct SiteSigmaTests {
         #expect(FrozenPhonons.bFactor(sigma: 0) == 0)
         #expect(FrozenPhonons.sigma(bFactor: 0) == 0)
         let b = FrozenPhonons.bFactor(sigma: 0.075)
-        #expect(abs(b - 8 * Double.pi * Double.pi * 0.075 * 0.075) <= 1e-15 * b)
+        let piSquared: Double = Double.pi * Double.pi
+        let expected: Double = 8 * piSquared * (0.075 * 0.075)
+        #expect(abs(b - expected) <= 1e-15 * b)
         for sigma in [1e-4, 0.05, 0.0707, 0.1, 0.3, 1.0] {
             let back = FrozenPhonons.sigma(bFactor: FrozenPhonons.bFactor(sigma: sigma))
             #expect(abs(back - sigma) <= 1e-15 * sigma, "σ = \(sigma)")
@@ -131,7 +141,9 @@ struct SiteSigmaTests {
         #expect(throws: (any Error).self) {
             try FrozenPhonons(structure: s, sigmas: [6: 0.1, 8: .nan], configurations: 1, seed: 0)
         }
-        #expect(try FrozenPhonons(structure: s, siteSigmas: [0, 0], configurations: 2, seed: 1).displacements
-                    .allSatisfy { $0.allSatisfy { $0 == .zero } })
+        let still = try FrozenPhonons(structure: s, siteSigmas: [0, 0], configurations: 2, seed: 1)
+        for d in still.displacements {
+            #expect(d == [SIMD3<Double>.zero, SIMD3<Double>.zero])
+        }
     }
 }
