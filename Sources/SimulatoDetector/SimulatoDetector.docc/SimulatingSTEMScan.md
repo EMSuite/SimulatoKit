@@ -38,6 +38,7 @@ All angles are in mrad.
 - ``AnnularDetector``: sums the diffraction intensity where inner² ≤ α² < outer². One number per position. `outer` defaults to the largest whole angle inside the antialias cutoff, and an outer angle beyond the simulated pattern throws. A bright-field detector is `AnnularDetector(inner: 0, outer: semiangle)`, and ADF and HAADF differ only in the limits.
 - ``PixelatedDetector``: the diffraction pattern, cropped and shifted so that zero angle is at the centre. `maxAngle` is `.cutoff`, `.valid` (the default, the region free of aliasing, which is the cutoff divided by √2) or `.full`. The value shape is `[nx, ny]` of the cropped pattern.
 - ``SegmentedDetector``: `radialBins` x `azimuthalBins` bins between `inner` and `outer`, the azimuth measured from `rotation` in rad. The value shape is `[radialBins, azimuthalBins]`, with the azimuthal index fastest.
+- ``FlexibleAnnularDetector``: radial bins of `step` mrad (1 by default) from `inner` to `outer` and one azimuthal bin, value shape `[bins, 1]`. Any annular range on bin edges is summed after the run with `integrateRadial(inner:outer:detector:)` and the detector's `segmented(for:beam:)`, so bright field, ABF, ADF and HAADF come from one scan.
 - ``CenterOfMassDetector``: the centre of mass of the pattern over a pixelated detector's region, in 1/Å (default) or mrad. Two values per position, x then y.
 - ``WavesDetector``: the complex exit wave itself, optionally resampled in Fourier space to `rows` x `columns`. It has its own `STEM.scan` overload and returns ``ScanWaves`` (see below).
 
