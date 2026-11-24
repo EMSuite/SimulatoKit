@@ -11,10 +11,15 @@ public struct AtomicStructure: Sendable, Hashable {
         public var atomicNumber: Int
         /// Cartesian position (x, y, z) [Å].
         public var position: SIMD3<Double>
+        /// The fraction of cells in which the site holds this atom, in (0, 1]. Atoms on one site share it: their
+        /// occupancies add up to at most 1. A partly occupied atom is drawn per configuration (`FrozenPhonons`); a
+        /// potential takes whole atoms only.
+        public var occupancy: Double
 
-        public init(atomicNumber: Int, position: SIMD3<Double>) {
+        public init(atomicNumber: Int, position: SIMD3<Double>, occupancy: Double = 1) {
             self.atomicNumber = atomicNumber
             self.position = position
+            self.occupancy = occupancy
         }
     }
 
@@ -23,7 +28,7 @@ public struct AtomicStructure: Sendable, Hashable {
     public let atoms: [Atom]
 
     /// - Throws: `SimulatoError.invalidBox` for a non-finite or non-positive side, `invalidPosition` for a non-finite
-    ///   coordinate. Atoms outside the box are wrapped into it when the potential is built (periodic boundaries).
+    ///   coordinate, `invalidOccupancy` for an occupancy outside (0, 1]. Atoms outside the box are wrapped into it when the potential is built (periodic boundaries).
     public init(box: SIMD3<Double>, atoms: [Atom]) throws {
         guard box.x.isFinite, box.y.isFinite, box.z.isFinite, box.x > 0, box.y > 0, box.z > 0 else {
             throw SimulatoError.invalidBox(box.x, box.y, box.z)
@@ -32,9 +37,15 @@ public struct AtomicStructure: Sendable, Hashable {
         where !(a.position.x.isFinite && a.position.y.isFinite && a.position.z.isFinite) {
             throw SimulatoError.invalidPosition(index: i)
         }
+        if let i = atoms.firstIndex(where: { !($0.occupancy > 0 && $0.occupancy <= 1) }) {
+            throw SimulatoError.invalidOccupancy(atom: i, occupancy: atoms[i].occupancy)
+        }
         self.box = box
         self.atoms = atoms
     }
+
+    /// Whether any atom is only partly occupied.
+    public var hasPartialOccupancy: Bool { atoms.contains { $0.occupancy < 1 } }
 
     /// The structure repeated nx × ny × nz times, in ASE's order (x outermost, then y, then z, the atoms innermost).
     /// - Throws: `invalidShape` for a repeat count below 1, `tooManyAtoms` when the atoms' count overflows an `Int`,
@@ -59,7 +70,10 @@ public struct AtomicStructure: Sendable, Hashable {
             for my in 0..<ny {
                 for mz in 0..<nz {
                     let shift = SIMD3<Double>(Double(mx) * box.x, Double(my) * box.y, Double(mz) * box.z)
-                    for a in atoms { out.append(Atom(atomicNumber: a.atomicNumber, position: a.position + shift)) }
+                    for var a in atoms {
+                        a.position += shift
+                        out.append(a)
+                    }
                 }
             }
         }

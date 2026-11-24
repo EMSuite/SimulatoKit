@@ -39,6 +39,12 @@ public enum SimulatoError: Error, Sendable, Equatable, CustomStringConvertible {
     case strainTooLarge(strain: Double, maximum: Double, repetitions: Int)
     /// A site that is only partly occupied (the slab builder takes whole atoms).
     case partialOccupancy(site: Int, occupancy: Double)
+    /// An atom whose occupancy is not in (0, 1], or a shared site whose atoms' occupancies add up to more than 1
+    /// (`occupancy` is then the site's total).
+    case invalidOccupancy(atom: Int, occupancy: Double)
+    /// An atom that is only partly occupied where whole atoms are needed: a potential takes the atoms of one drawn
+    /// configuration (`FrozenPhonons`).
+    case partlyOccupiedAtom(index: Int, occupancy: Double)
     /// A slab of `count` atoms, more than the `limit` allowed.
     case tooManyAtoms(count: Int, limit: Int)
     /// The waves of one batch have different energies [eV]: the first wave's and another's (a batch shares its
@@ -79,6 +85,10 @@ public enum SimulatoError: Error, Sendable, Equatable, CustomStringConvertible {
             return "no orthogonal cell holds the strain limit of \(limit * 100) %: the least strain is \(s * 100) % at \(n) repetitions"
         case .partialOccupancy(let i, let o):
             return "site \(i) is only partly occupied (\(o)); the slab takes whole atoms"
+        case .invalidOccupancy(let i, let o):
+            return "atom \(i) has occupancy \(o) on its site; occupancies lie in (0, 1] and add up to at most 1 on a shared site"
+        case .partlyOccupiedAtom(let i, let o):
+            return "atom \(i) is only partly occupied (\(o)); draw whole atoms per configuration with FrozenPhonons before building the potential"
         case .tooManyAtoms(let n, let limit): return "the slab would hold \(n) atoms, more than the \(limit) allowed"
         case .mixedEnergies(let first, let other):
             return "the waves of one batch must share one energy, got \(first) eV and \(other) eV; run each energy separately"

@@ -4,7 +4,8 @@
 //        Gaussian of standard deviation σ (per element or per site, per axis) along the chosen axes; σ ↔ B = 8π²σ².
 //        Displacements are either given (e.g. abTEM's, from the pins) or drawn by the kit's own seeded generator
 //        (SplitMix64 → xoshiro256**, Box–Muller), tested by its statistics, not by abTEM's bits.
-//        The displaced structure is wrapped by the potential.
+//        The displaced structure is wrapped by the potential. Partly occupied sites are drawn per configuration
+//        (`OccupancyDraw`): a configuration holds whole atoms only.
 //
 
 import Foundation
@@ -73,9 +74,16 @@ public struct FrozenPhonons: Sendable, Hashable {
     public let structure: AtomicStructure
     /// The displacement of every atom [Å], one array per configuration (in the structure's atom order).
     public let displacements: [[SIMD3<Double>]]
+    /// The partly occupied sites of the structure and their draw (empty when every atom is whole).
+    public let occupancy: OccupancyDraw
+    /// The seed of the occupancy draw (the seed of the displacements when they are drawn by the kit).
+    public let occupancySeed: UInt64
 
-    /// Given displacements (e.g. abTEM's, or from another generator).
-    public init(structure: AtomicStructure, displacements: [[SIMD3<Double>]]) throws {
+    /// Given displacements (e.g. abTEM's, or from another generator); partly occupied sites are drawn with
+    /// `occupancySeed`.
+    /// - Throws: `invalidFrozenPhonons` for no configuration or displacements that do not fit the atoms;
+    ///   `invalidOccupancy` for a shared site filled beyond 1.
+    public init(structure: AtomicStructure, displacements: [[SIMD3<Double>]], occupancySeed: UInt64 = 0) throws {
         guard !displacements.isEmpty else { throw SimulatoError.invalidFrozenPhonons("no configuration") }
         for (c, d) in displacements.enumerated() {
             guard d.count == structure.atoms.count else {
@@ -87,6 +95,8 @@ public struct FrozenPhonons: Sendable, Hashable {
         }
         self.structure = structure
         self.displacements = displacements
+        self.occupancy = try OccupancyDraw(structure: structure)
+        self.occupancySeed = occupancySeed
     }
 
     /// Displacements drawn by the kit's generator, σ per element: every atom takes the σ of its Z (Å; every element of
@@ -131,7 +141,7 @@ public struct FrozenPhonons: Sendable, Hashable {
             }
             all.append(d)
         }
-        try self.init(structure: structure, displacements: all)
+        try self.init(structure: structure, displacements: all, occupancySeed: seed)
     }
 
     /// The σ of every atom of `structure` (in its atom order) from a σ per element.
@@ -173,15 +183,20 @@ public struct FrozenPhonons: Sendable, Hashable {
         return mix(mix(seed) &+ UInt64(c))
     }
 
-    /// Configuration c: every atom at its position plus its displacement (not wrapped; the potential wraps it).
+    /// Configuration c: every atom at its position plus its displacement (not wrapped; the potential wraps it), and of
+    /// each partly occupied site the atom the draw keeps, whole (``OccupancyDraw/kept(seed:configuration:)``).
     /// - Throws: `invalidFrozenPhonons` for c outside 0 ..< the configurations.
     public func configuration(_ c: Int) throws -> AtomicStructure {
         guard displacements.indices.contains(c) else {
             throw SimulatoError.invalidFrozenPhonons("configuration \(c) is outside 0 ..< \(displacements.count)")
         }
-        return try AtomicStructure(box: structure.box, atoms: zip(structure.atoms, displacements[c]).map {
-            AtomicStructure.Atom(atomicNumber: $0.0.atomicNumber, position: $0.0.position + $0.1)
-        })
+        let keep = occupancy.isEmpty ? nil : occupancy.kept(seed: occupancySeed, configuration: c)
+        var atoms: [AtomicStructure.Atom] = []
+        atoms.reserveCapacity(structure.atoms.count)
+        for (i, (atom, d)) in zip(structure.atoms, displacements[c]).enumerated() where keep?[i] ?? true {
+            atoms.append(AtomicStructure.Atom(atomicNumber: atom.atomicNumber, position: atom.position + d))
+        }
+        return try AtomicStructure(box: structure.box, atoms: atoms)
     }
 
     /// The projected potential of every configuration.

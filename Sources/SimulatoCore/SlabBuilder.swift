@@ -124,14 +124,16 @@ public enum SlabBuilder {
 
     /// The orthogonal unit at a fixed number of repetitions (abTEM's `orthogonalize_cell(max_repetitions:)`), whatever its
     /// strain.
+    /// Every atom keeps its site's occupancy; with `allowsPartialOccupancy` false (the default) a partly occupied site is
+    /// refused, with it true its atoms carry their occupancy, to be drawn per configuration (`FrozenPhonons`).
     /// - Throws: `SimulatoError.invalidZoneAxis` for [0 0 0]; `invalidRepetitions` outside 1 ... 64; `partialOccupancy` for
-    ///   a site with occupancy below 1; `invalidCell` when no orthogonal cell is found within the repetitions.
-    public static func orthogonalUnit(of cell: CrystalCell, zoneAxis: SIMD3<Int>,
-                                      maximumRepetitions: Int) throws -> OrthogonalUnit {
+    ///   a site with occupancy below 1 unless allowed; `invalidCell` when no orthogonal cell is found within the repetitions.
+    public static func orthogonalUnit(of cell: CrystalCell, zoneAxis: SIMD3<Int>, maximumRepetitions: Int,
+                                      allowsPartialOccupancy: Bool = false) throws -> OrthogonalUnit {
         guard (1...maximumRepetitionsLimit).contains(maximumRepetitions) else {
             throw SimulatoError.invalidRepetitions(maximumRepetitions)
         }
-        try checkOccupancy(cell)
+        if !allowsPartialOccupancy { try checkOccupancy(cell) }
         let rotation = try zoneRotation(cell, zoneAxis: zoneAxis)
         return try unit(cell, rotation: rotation, repetitions: maximumRepetitions)
     }
@@ -139,11 +141,12 @@ public enum SlabBuilder {
     /// The orthogonal unit with the fewest repetitions of ``repetitionLadder`` whose strain is at most `maximumStrain`.
     /// - Throws: `SimulatoError.strainTooLarge` with the least strain found (and its repetitions) when no rung holds it;
     ///   `invalidStrain` for a limit that is not finite and non-negative; the refusals of
-    ///   ``orthogonalUnit(of:zoneAxis:maximumRepetitions:)``.
+    ///   ``orthogonalUnit(of:zoneAxis:maximumRepetitions:allowsPartialOccupancy:)``.
     public static func orthogonalUnit(of cell: CrystalCell, zoneAxis: SIMD3<Int>,
-                                      maximumStrain: Double = defaultMaximumStrain) throws -> OrthogonalUnit {
+                                      maximumStrain: Double = defaultMaximumStrain,
+                                      allowsPartialOccupancy: Bool = false) throws -> OrthogonalUnit {
         guard maximumStrain.isFinite, maximumStrain >= 0 else { throw SimulatoError.invalidStrain(maximumStrain) }
-        try checkOccupancy(cell)
+        if !allowsPartialOccupancy { try checkOccupancy(cell) }
         let rotation = try zoneRotation(cell, zoneAxis: zoneAxis)
         var best: OrthogonalUnit?
         for n in repetitionLadder {
@@ -154,22 +157,24 @@ public enum SlabBuilder {
         throw SimulatoError.strainTooLarge(strain: best!.strain, maximum: maximumStrain, repetitions: best!.maximumRepetitions)
     }
 
-    /// A slab: the orthogonal unit (``orthogonalUnit(of:zoneAxis:maximumStrain:)``) repeated to at least `lateralSize` in x
+    /// A slab: the orthogonal unit (``orthogonalUnit(of:zoneAxis:maximumStrain:allowsPartialOccupancy:)``) repeated to at least `lateralSize` in x
     /// and y (one unit when nil) and to the whole number of periods nearest `thickness` (at least one), cut in k equal
     /// slices per period of at most `sliceThickness`, with the atoms shifted along z so no atomic plane sits on a slice
-    /// boundary.
+    /// boundary. `allowsPartialOccupancy` as for ``orthogonalUnit(of:zoneAxis:maximumRepetitions:allowsPartialOccupancy:)``.
     /// - Throws: `SimulatoError.invalidBox` for a lateral size or thickness that is not finite and positive;
     ///   `invalidSliceThickness`; `tooManyAtoms` above `maximumAtomCount`; the refusals of the unit.
     public static func slab(of cell: CrystalCell, zoneAxis: SIMD3<Int>, lateralSize: SIMD2<Double>? = nil,
                             thickness: Double, sliceThickness: Double = 1,
                             maximumStrain: Double = defaultMaximumStrain,
-                            maximumAtomCount: Int = defaultMaximumAtomCount) throws -> Slab {
+                            maximumAtomCount: Int = defaultMaximumAtomCount,
+                            allowsPartialOccupancy: Bool = false) throws -> Slab {
         let lateral = lateralSize ?? SIMD2(0, 0)
         guard thickness.isFinite, thickness > 0, lateral.x.isFinite, lateral.y.isFinite, lateral.x >= 0, lateral.y >= 0 else {
             throw SimulatoError.invalidBox(lateral.x, lateral.y, thickness)
         }
         guard sliceThickness.isFinite, sliceThickness > 0 else { throw SimulatoError.invalidSliceThickness(sliceThickness) }
-        let unit = try orthogonalUnit(of: cell, zoneAxis: zoneAxis, maximumStrain: maximumStrain)
+        let unit = try orthogonalUnit(of: cell, zoneAxis: zoneAxis, maximumStrain: maximumStrain,
+                                      allowsPartialOccupancy: allowsPartialOccupancy)
         let box = unit.structure.box
         func count(_ want: Double, _ side: Double) -> Double { max(1, (want / side - 1e-9).rounded(.up)) }
         let n = SIMD3(count(lateral.x, box.x), count(lateral.y, box.y),
@@ -185,11 +190,13 @@ public enum SlabBuilder {
         let z = unit.structure.atoms.map(\.position.z)
         let shift = zShift(z, sliceHeight: h)
         let shifted = unit.structure.atoms.map { atom -> AtomicStructure.Atom in
+            var moved = atom
             var p = atom.position
             var w = (p.z + shift).truncatingRemainder(dividingBy: box.z)
             if w < 0 { w += box.z }
             p.z = w
-            return AtomicStructure.Atom(atomicNumber: atom.atomicNumber, position: p)
+            moved.position = p
+            return moved
         }
         let structure = try AtomicStructure(box: box, atoms: shifted).repeated(repeats.x, repeats.y, repeats.z)
         return Slab(structure: structure, unit: unit, repeats: repeats,
@@ -366,7 +373,10 @@ public enum SlabBuilder {
                         guard s.x >= 0, s.x < 1, s.y >= 0, s.y < 1, s.z >= 0, s.z < 1 else { continue }
                         var p = s * box
                         for a in 0..<3 where p[a] > box[a] - 1e-6 || p[a] < 1e-6 { p[a] = 0 }
-                        atoms.append(AtomicStructure.Atom(atomicNumber: site.atomicNumber, position: p))
+                        // The refusal's threshold: a site within 1e-6 of whole is whole.
+                        let occupancy = site.occupancy < 1 - 1e-6 ? site.occupancy : 1
+                        atoms.append(AtomicStructure.Atom(atomicNumber: site.atomicNumber, position: p,
+                                                          occupancy: occupancy))
                     }
                 }
             }
