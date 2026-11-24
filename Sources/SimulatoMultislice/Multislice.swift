@@ -122,6 +122,7 @@ public enum Multislice {
 
     /// The bandlimited transmission function of each slice, in float64 (both backends start from these).
     public static func transmissionFunctions(_ potential: ProjectedPotential, beam: ElectronBeam) throws -> [ComplexField] {
+        workCounter?.preparations.withLock { $0 += 1 }
         let grid = potential.grid
         let fft = try FFT2D(nx: grid.nx, ny: grid.ny)
         let aperture = Antialias.aperture(on: grid)
@@ -172,11 +173,13 @@ public enum Multislice {
 
     /// One wave through the slices on the calling thread; `afterSlice(j)` runs after slice j (zero-based) and may throw
     /// to stop the run.
+    /// `fft` and `propagators` (by slice thickness, for the incident's energy and tilt) are reused when given.
     package static func runCPU(_ incident: Waves, potential: ProjectedPotential, transmissions: [ComplexField],
-                               planes: [Int], afterSlice: (Int) throws -> Void = { _ in }) throws -> [Waves] {
+                               planes: [Int], fft: FFT2D? = nil, propagators: [Double: ComplexField] = [:],
+                               afterSlice: (Int) throws -> Void = { _ in }) throws -> [Waves] {
         let grid = potential.grid
-        let fft = try FFT2D(nx: grid.nx, ny: grid.ny)
-        var propagators: [Double: ComplexField] = [:]
+        let fft = try fft ?? FFT2D(nx: grid.nx, ny: grid.ny)
+        var propagators = propagators
         var psi = incident.field
         var out: [Waves] = []
         if planes.first == -1 { out.append(incident) }
