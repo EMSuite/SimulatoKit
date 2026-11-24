@@ -8,7 +8,8 @@
 import SimulatoCore
 
 /// A structure sliced on a grid, ready to be built into a projected potential (on the CPU by `build()`, or slice by slice
-/// on the GPU by the `.metal` backend).
+/// on the GPU by the `.metal` backend). As in abTEM, the beam enters at z = 0 and travels along +z: the first slice is the
+/// lowest z (a `Slab`'s structure is already depth below its entrance face).
 public struct Potential: Sendable, Hashable {
     public let grid: Grid
     /// The thickness of every slice [Å].

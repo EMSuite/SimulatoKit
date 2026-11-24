@@ -263,7 +263,11 @@ above.
   against py4DSTEM's matrices); the repetition ladder 5, 10, 20, 40 under a strain limit (0.1 % by default, a typed refusal
   with the least strain found); coordinates within 1e−6 Å of a face set on it; slices that repeat with the period
   (⌈period / s⌉ per period) and a shift along z of j h / 720 that keeps every atomic plane farthest from a slice boundary
-  (0.48 Å on Si [110] with slices of 0.96 Å).
+  (0.48 Å on Si [110] with slices of 0.96 Å). The slab's z is depth below the entrance face, the face nearest the source: each unit is mirrored z → period − z
+  after the shift, since the multislice transmits from z = 0 along +z as abTEM does (#126). Mirroring crystal and beam
+  together leaves the exit wave's (x, y) unchanged, so images and patterns stay as seen from the source, DiffractoKit's view (the potential holds the mirror image of the
+  crystal on purpose: it is the real crystal in a frame where the beam travels +z);
+  the slab and beam-intensity pins feed abTEM the same mirrored atoms.
 - Beam intensities by hkl (0.6.0): only beams of the zero-order Laue zone ((V hkl)_z = 0), within the cutoff pattern and |g| at most its largest frequency (abTEM's default `g_max`). abTEM labels each pixel with the indexed reflection of smallest excitation error, which near the first-order Laue ring can be a higher-order reflection that projects onto the same pixel; the kit names the pixel by its zero-order hkl (the value is the same pixel). abTEM's default `sg_max` (`estimate_necessary_excitation_error`) leaves zero-order beams beyond about √(2 g_max) unindexed; the pin passes λ g_max² / 2 so every one is. The pinned cases have no pixel where the two labels differ.
 ## Known limits and decisions
 

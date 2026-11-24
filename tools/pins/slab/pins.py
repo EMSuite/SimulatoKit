@@ -15,7 +15,7 @@ Writes Tests/SimulatoKitParityTests/Fixtures/slab-pins.json and slab-arrays.bin:
   source) and a turn about the beam only (the kit puts a lattice row along x, py4DSTEM a fixed reference).
 * slab: Si [110], 200 kV, one orthogonal unit laterally and 10 periods deep, cut in slices of at most 1 A that repeat with
   the period (8 per period): the built slab's atoms (after the kit's z shift, which keeps every atomic plane off a slice
-  boundary) and abTEM's exit wave of exactly those atoms and slices (`PlaneWave.multislice`, infinite projection, float64). The test holds it at the kit's multislice pin (1e-10 of
+  boundary, and its mirror to depth below the face nearest the source, #126) and abTEM's exit wave of exactly those atoms and slices (`PlaneWave.multislice`, infinite projection, float64). The test holds it at the kit's multislice pin (1e-10 of
   the largest value with abTEM's float32 pi, 1e-6 with the exact pi).
 
 The rotation that turns the cell to the zone axis is the kit's (SlabBuilder.swift), restated here: z along the zone axis,
@@ -247,6 +247,12 @@ def z_shift(z, slice_height):
     return best_j * slice_height / SHIFT_STEPS, best_f
 
 
+def to_depth(z, period):
+    """The kit's turn to depth (#126): the unit's z points at the source and abTEM's beam travels +z from z = 0, so the
+    slab mirrors z -> period - z in every unit; z is then the depth below the face nearest the source."""
+    return (period - np.mod(z, period)) % period
+
+
 def main():
     s = structures()
     pins = {"generator": "tools/pins/slab/pins.py",
@@ -294,7 +300,7 @@ def main():
     k, h = slice_plan(period, slice_thickness)
     delta, margin = z_shift(z, h)
     unit_pos = np.array(u["positions"])
-    unit_pos[:, 2] = (unit_pos[:, 2] + delta) % period
+    unit_pos[:, 2] = to_depth((unit_pos[:, 2] + delta) % period, period)
     numbers = u["numbers"] * periods
     positions = np.concatenate([unit_pos + [0, 0, m * period] for m in range(periods)])
     box = [u["box"][0], u["box"][1], period * periods]
