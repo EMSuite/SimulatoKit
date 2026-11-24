@@ -55,6 +55,9 @@ public struct Potential: Sendable, Hashable {
         for a in structure.atoms where !parameterization.supports(atomicNumber: a.atomicNumber) {
             throw SimulatoError.unsupportedElement(a.atomicNumber)
         }
+        if let i = structure.atoms.firstIndex(where: { $0.occupancy < 1 }) {
+            throw SimulatoError.partlyOccupiedAtom(index: i, occupancy: structure.atoms[i].occupancy)
+        }
         let atoms = Slicing.wrapped(structure)
         self.grid = grid
         self.sliceThicknesses = thicknesses

@@ -115,6 +115,22 @@ struct SlabBuilderTests {
         #expect(throws: SimulatoError.partialOccupancy(site: 1, occupancy: 0.4)) {
             try SlabBuilder.slab(of: half, zoneAxis: SIMD3(0, 0, 1), thickness: 10)
         }
+        // Allowed, every atom carries its site's occupancy through the turn, the cut, the shift and the repeat.
+        let drawn = try SlabBuilder.slab(of: half, zoneAxis: SIMD3(1, 1, 0), lateralSize: SIMD2(10, 10), thickness: 10,
+                                         allowsPartialOccupancy: true)
+        #expect(!drawn.structure.atoms.isEmpty && drawn.structure.hasPartialOccupancy)
+        #expect(drawn.structure.atoms.allSatisfy { $0.occupancy == ($0.atomicNumber == 12 ? 0.4 : 1) })
+        #expect(drawn.structure.atoms.filter { $0.atomicNumber == 12 }.count
+                    == drawn.structure.atoms.filter { $0.atomicNumber == 13 }.count)
+        // A site within 1e-6 of whole passes the refusal and is whole on every atom, so the potential takes it.
+        let nearlyWhole = try CrystalCell(a: 4.05, b: 4.05, c: 4.05, alpha: 90, beta: 90, gamma: 90, sites: [
+            CrystalCell.Site(atomicNumber: 13, fractional: .zero, occupancy: 0.9999995),
+        ])
+        for allows in [false, true] {
+            let slab = try SlabBuilder.slab(of: nearlyWhole, zoneAxis: SIMD3(0, 0, 1), thickness: 10,
+                                            allowsPartialOccupancy: allows)
+            #expect(slab.structure.atoms.allSatisfy { $0.occupancy == 1 } && !slab.structure.hasPartialOccupancy)
+        }
         // Mg [1 0 3] needs 11.3 % at 5 repetitions and 0.22 % at 10, 20 and 40: refused at 0.1 %, carrying the strain; accepted at 1 %.
         do {
             _ = try SlabBuilder.orthogonalUnit(of: magnesium(), zoneAxis: SIMD3(1, 0, 3))

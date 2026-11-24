@@ -112,7 +112,7 @@ extension SlabBuilder {
     }
 
     /// A slab of an atom model (``orthogonalUnit(ofModel:beamAlong:maximumStrain:)``), as
-    /// ``slab(of:zoneAxis:lateralSize:thickness:sliceThickness:maximumStrain:maximumAtomCount:)`` makes one of a crystal: the unit
+    /// ``slab(of:zoneAxis:lateralSize:thickness:sliceThickness:maximumStrain:maximumAtomCount:allowsPartialOccupancy:)`` makes one of a crystal: the unit
     /// repeated to at least `lateralSize` in x and y (one unit when nil), along the beam to the whole number of periods nearest
     /// `thickness` (at least one), or one period when nil, cut in equal slices of at most `sliceThickness` per period, shifted
     /// along z so no atomic plane sits on a slice boundary. Box z is depth below the entrance face.
