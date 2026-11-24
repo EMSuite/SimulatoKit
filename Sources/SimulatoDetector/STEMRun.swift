@@ -116,7 +116,7 @@ public struct STEMRun: Sendable {
     /// - Throws: `CancellationError` when the task is cancelled (what was finished is kept: call again to continue); the
     ///   simulation's errors (after one of those the run's sums may hold part of a round: start a new run).
     public mutating func run(progress: SimulationProgressHandler? = nil) throws -> [ScanMeasurement] {
-        var reporter = ProgressReporter(progress, interval: options.progressInterval)
+        var reporter = SimulationProgressReporter(progress, interval: options.progressInterval)
         while completedConfigurations < configurationCount {
             reporter.report(snapshot(.preparing, slicesDone: 0, slices: 1, fractionKnown: false))
             try Task.checkCancellation()
@@ -143,7 +143,7 @@ public struct STEMRun: Sendable {
                                   configurationCount: k > 1 ? k : nil)
     }
 
-    mutating func cpuConfiguration(_ reporter: inout ProgressReporter) throws {
+    mutating func cpuConfiguration(_ reporter: inout SimulationProgressReporter) throws {
         let potential: ProjectedPotential
         switch source {
         case .built(let p): potential = p[completedConfigurations]
@@ -177,7 +177,7 @@ public struct STEMRun: Sendable {
         }
     }
 
-    mutating func metalConfiguration(_ reporter: inout ProgressReporter) throws {
+    mutating func metalConfiguration(_ reporter: inout SimulationProgressReporter) throws {
         let start = completedPositions
         let remaining = positions.count - start
         guard remaining > 0 else { return }
