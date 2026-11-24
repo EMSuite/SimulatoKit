@@ -15,8 +15,6 @@ public enum ImageOperationError: Error, Sendable, Equatable, CustomStringConvert
     case invalidCrop(String)
     /// Two images compared pixel by pixel differ in shape or sampling.
     case imagesDiffer
-    /// A relative difference's minimum relative tolerance that is not finite.
-    case invalidTolerance(Double)
     /// A repetition count below 1, or a tiled image of more than 2^28 values (or one whose size overflows).
     case invalidRepetitions(Int, Int)
     /// A disc position or radius that is not finite, or a radius that is not positive.
@@ -31,7 +29,6 @@ public enum ImageOperationError: Error, Sendable, Equatable, CustomStringConvert
         case .gradientComponentsDiffer: return "the two gradient components must have the same shape and sampling"
         case .invalidCrop(let why): return "invalid crop: \(why)"
         case .imagesDiffer: return "the two images must have the same shape and sampling"
-        case .invalidTolerance(let t): return "the minimum relative tolerance must be finite, got \(t)"
         case .invalidRepetitions(let x, let y): return "repetitions must be at least 1 along both axes and give at most 2^28 values, got (\(x), \(y))"
         case .invalidDisc(let why): return "invalid integration disc: \(why)"
         case .discOutsideImage: return "the integration region is outside the image"

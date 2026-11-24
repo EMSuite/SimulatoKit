@@ -50,9 +50,6 @@ extension RealField {
     /// The image inside a window centred on the image (abTEM `Images.crop(extent, centered=True)`): the offset is half the
     /// image's extent minus half the window's, then as `cropped(extentX:extentY:offsetX:offsetY:)`.
     public func croppedCentered(extentX: Double, extentY: Double) throws -> RealField {
-        guard extentX.isFinite, extentY.isFinite else {
-            throw ImageOperationError.invalidCrop("the extent must be finite, got (\(extentX), \(extentY)) Å")
-        }
         let full = extent
         return try cropped(extentX: extentX, extentY: extentY, offsetX: full.x / 2 - extentX / 2, offsetY: full.y / 2 - extentY / 2)
     }
@@ -63,13 +60,12 @@ extension RealField {
     /// (± infinity, or NaN where b is 0 too), as abTEM's does. The sampling stays.
     /// One named departure: abTEM compares any two images of the same shape, whatever their samplings; this refuses images
     /// whose samplings differ, since their pixels are not the same places (resample first, `interpolated(samplingX:samplingY:)`).
-    /// - Throws: `ImageOperationError.imagesDiffer` when the two differ in shape or sampling,
-    ///   `ImageOperationError.invalidTolerance` for a tolerance that is not finite.
+    /// A NaN or infinite tolerance makes every pixel NaN, as abTEM's does.
+    /// - Throws: `ImageOperationError.imagesDiffer` when the two differ in shape or sampling.
     public func relativeDifference(to other: RealField, minimumRelativeTolerance: Double = 0) throws -> RealField {
         guard nx == other.nx, ny == other.ny, samplingX == other.samplingX, samplingY == other.samplingY else {
             throw ImageOperationError.imagesDiffer
         }
-        guard minimumRelativeTolerance.isFinite else { throw ImageOperationError.invalidTolerance(minimumRelativeTolerance) }
         // NumPy's max propagates NaN: one NaN makes every comparison false, so every pixel is NaN.
         let peak = values.contains { $0.isNaN } ? Double.nan : (values.max() ?? 0)
         let floor = minimumRelativeTolerance * peak

@@ -112,12 +112,12 @@ struct ImageComparisonTests {
         #expect(try Self.a.relativeDifference(to: Self.a).values.allSatisfy { $0 == 0 })
     }
 
-    @Test("images of another shape, another sampling, or a tolerance that is not finite are refused")
+    @Test("images of another shape or another sampling are refused; a NaN tolerance gives NaN everywhere, as abTEM's")
     func differenceRefusals() throws {
         let other = try RealField(nx: 7, ny: 9, values: Self.a.values, samplingX: 0.3, samplingY: 0.2)
         #expect(throws: ImageOperationError.imagesDiffer) { try Self.a.relativeDifference(to: other) }
         let small = try Self.a.cropped(extentX: 1.8, extentY: 2.25)
         #expect(throws: ImageOperationError.imagesDiffer) { try Self.a.relativeDifference(to: small) }
-        #expect(throws: ImageOperationError.self) { try Self.a.relativeDifference(to: Self.b, minimumRelativeTolerance: .nan) }
+        #expect(try Self.a.relativeDifference(to: Self.b, minimumRelativeTolerance: .nan).values.allSatisfy(\.isNaN), "as abTEM's")
     }
 }
