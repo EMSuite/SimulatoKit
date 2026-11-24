@@ -122,20 +122,27 @@ struct ProgressAndCancellationTests {
     func twoMetalRunsInterleave() throws {
         let (lazy, wave) = try Self.crystal()
         let short = try Potential(structure: aluminiumStructure(cells: (2, 2, 1)), nx: 64, ny: 64, sliceThickness: 2.025)
-        let finished = ProgressLog()
+        let started = ProgressLog(), finished = ProgressLog()
         let reference = try Multislice.run(wave, through: short, backend: .metal)
+        let second = DispatchGroup()
         _ = try Multislice.run(wave, through: lazy, backend: .metal, options: Self.everyCall) { p in
-            guard p.stage == .propagating, finished.all.isEmpty else { return }
-            let done = DispatchSemaphore(value: 0)
+            // One second run only: the guard is on starting it, so a slow runner past the wait starts no third.
+            guard p.stage == .propagating, started.all.isEmpty else { return }
+            started.calls.withLock { $0.append(p) }
+            second.enter()
             DispatchQueue.global().async {
                 if let out = try? Multislice.run(wave, through: short, backend: .metal),
                    zip(out, reference).allSatisfy({ relMax($0.field, $1.field) <= 1e-6 }) {
                     finished.calls.withLock { $0.append(p) }
                 }
-                done.signal()
+                second.leave()
             }
-            _ = done.wait(timeout: .now() + 60)
+            // Deadlock-free means the second run completes while the first is parked here (74 s seen on a busy
+            // runner); the bound only keeps a real deadlock from hanging CI.
+            _ = second.wait(timeout: .now() + 600)
         }
+        _ = second.wait(timeout: .now() + 600)
+        #expect(started.all.count == 1)
         #expect(finished.all.count == 1, "the second run finished inside the first run's handler")
     }
 }
