@@ -98,6 +98,10 @@ extension SlabBuilder {
     /// strain is at most `maximumStrain`. With the beam along z a model whose cell is rectangular along x, y and z passes
     /// through unchanged apart from the wrap and the 1e−6 Å snap to the faces (along x or y its axes are permuted);
     /// another cell is cut into the best orthogonal cell with its strain. The orientation is the permutation.
+    ///
+    /// The beam enters at the box's z = 0 and travels +z (SimulatoKit#126): a box z is depth below the entrance face, the face
+    /// nearest the source. With `.z`, the model's atom at the smallest z (after the wrap) is the first the beam meets; to enter
+    /// a model from its other face, turn it 180° about x before building (a mirror would change its handedness).
     /// - Throws: `SimulatoError.strainTooLarge` with the least strain found; `invalidStrain`; `partialOccupancy` for a
     ///   partly occupied atom; `invalidCell` when no orthogonal cell is found.
     public static func orthogonalUnit(ofModel model: CrystalCell, beamAlong axis: BeamAxis = .z,
