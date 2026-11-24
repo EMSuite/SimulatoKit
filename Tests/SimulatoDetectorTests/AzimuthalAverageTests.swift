@@ -73,4 +73,76 @@ struct AzimuthalAverageTests {
         #expect(throws: SimulatoError.self) { try p.azimuthalAverage(beam: Self.beam, maxAngle: .infinity) }
         #expect(throws: SimulatoError.self) { try p.azimuthalAverage(beam: Self.beam, maxAngle: 1e9) }
     }
+
+    /// The average as it was before #61, every ring over every pixel: the per-pixel rings must equal it bit for bit.
+    static func everyRingOverEveryPixel(_ p: RealField, maxAngle: Double?, radialSampling: Double,
+                                        weighting: AzimuthalWeighting, width: Double) -> [Double] {
+        let wavelength = Self.beam.wavelength
+        func limits(_ n: Int, _ s: Double) -> (lower: Double, upper: Double) {
+            let l = n % 2 == 1 ? (Double(-((n - 1) / 2)) * s, Double((n - 1) / 2) * s)
+                               : (Double(-(n / 2)) * s, Double(n / 2 - 1) * s)
+            return (l.0 * wavelength * 1e3, l.1 * wavelength * 1e3)
+        }
+        let lx = limits(p.nx, p.samplingX), ly = limits(p.ny, p.samplingY)
+        let minAngular = min(p.samplingX * wavelength * 1e3, p.samplingY * wavelength * 1e3)
+        let maximum = maxAngle ?? -min(lx.lower, ly.lower)
+        let step = radialSampling * minAngular, w = width * minAngular
+        let rings = max(Int((maximum / step).rounded(.up)), 0)
+        func linspace32(_ l: (lower: Double, upper: Double), _ n: Int) -> [Float] {
+            guard n > 1 else { return [Float(l.lower)] }
+            let d = (l.upper - l.lower) / Double(n - 1)
+            var out = (0..<n).map { Float(Double($0) * d + l.lower) }
+            out[n - 1] = Float(l.upper)
+            return out
+        }
+        let ax = linspace32(lx, p.nx), ay = linspace32(ly, p.ny)
+        var radius = [Double](repeating: 0, count: p.nx * p.ny)
+        for ix in 0..<p.nx {
+            for iy in 0..<p.ny {
+                let r: Float = (ax[ix] * ax[ix] + ay[iy] * ay[iy]).squareRoot()
+                radius[ix * p.ny + iy] = Double(r)
+            }
+        }
+        return (0..<rings).map { i in
+            let center = Double(i) * step
+            var weight = 0.0, sum = 0.0
+            for k in radius.indices {
+                switch weighting {
+                case .step:
+                    if abs(radius[k] - center) < w {
+                        weight += 1
+                        sum += p.values[k]
+                    }
+                case .gaussian:
+                    let d = radius[k] - center
+                    let m = exp(-(d * d) / (w * w / 2))
+                    weight += m
+                    sum += p.values[k] * m
+                }
+            }
+            return weight > 0 ? sum / weight : 0
+        }
+    }
+
+    @Test func perPixelRingsEqualEveryRingOverEveryPixelBitForBit() throws {
+        // A 64 x 48 pattern with signed values, anisotropic sampling.
+        let values = (0..<(64 * 48)).map { k in sin(Double(k) * 0.37) * Double(k % 17) - 3 }
+        let p = RealField.unchecked(nx: 64, ny: 48, values: values, samplingX: 0.05, samplingY: 0.061)
+        for weighting in [AzimuthalWeighting.step, .gaussian] {
+            for (sampling, width, maxAngle) in [(1.0, 1.0, nil), (0.7, 1.5, 30.0), (2.3, 0.4, nil), (1.0, 12.0, 40.0),
+                                                (0.5, 3.0, nil)] as [(Double, Double, Double?)] {
+                let a = try p.azimuthalAverage(beam: Self.beam, maxAngle: maxAngle, radialSampling: sampling,
+                                               weighting: weighting, width: width)
+                let b = Self.everyRingOverEveryPixel(p, maxAngle: maxAngle, radialSampling: sampling,
+                                                     weighting: weighting, width: width)
+                #expect(a.values == b, "\(weighting) sampling \(sampling) width \(width)")
+            }
+        }
+        // A non-finite value reaches every Gaussian ring, as before.
+        var bad = values
+        bad[5] = .nan
+        let q = RealField.unchecked(nx: 64, ny: 48, values: bad, samplingX: 0.05, samplingY: 0.061)
+        let g = try q.azimuthalAverage(beam: Self.beam, weighting: .gaussian)
+        #expect(g.values.allSatisfy(\.isNaN))
+    }
 }
