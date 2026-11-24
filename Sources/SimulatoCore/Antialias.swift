@@ -51,8 +51,28 @@ public enum Antialias {
         return (size(grid.nx, Double(grid.nx) * grid.samplingX), size(grid.ny, Double(grid.ny) * grid.samplingY))
     }
 
+    /// The scattering angles [mrad] at the antialias cutoff (abTEM's `cutoff_angles`): ⌊n′/2⌋ · λ / L · 10³ per axis,
+    /// n′ the cutoff gpts with the grid's parity (``cutoffGpts(on:)``).
+    public static func cutoffAngles(on grid: Grid, wavelength: Double) -> (x: Double, y: Double) {
+        let g = cutoffGpts(on: grid)
+        return (Double(g.nx / 2) * (grid.reciprocalSamplingX * wavelength * 1e3),
+                Double(g.ny / 2) * (grid.reciprocalSamplingY * wavelength * 1e3))
+    }
+
+    /// The cutoff gpts with the grid's own parity (abTEM's `_antialias_cutoff_gpts`): ⌊round((2/3) / max(Δ) × L, 7)⌋,
+    /// moved by +1 to the grid's parity.
+    package static func cutoffGpts(on grid: Grid) -> (nx: Int, ny: Int) {
+        let kcut = 2.0 / 3.0 / max(grid.samplingX, grid.samplingY)
+        func size(_ n: Int, _ extent: Double) -> Int {
+            var m = Int(floor(roundToDecimals(kcut * extent, 7)))
+            if m % 2 != n % 2 { m += 1 }
+            return m
+        }
+        return (size(grid.nx, Double(grid.nx) * grid.samplingX), size(grid.ny, Double(grid.ny) * grid.samplingY))
+    }
+
     /// NumPy's `np.round(x, decimals)` for a scalar: x · 10^d rounded half to even, divided by 10^d.
-    static func roundToDecimals(_ x: Double, _ decimals: Int) -> Double {
+    package static func roundToDecimals(_ x: Double, _ decimals: Int) -> Double {
         let f = pow(10.0, Double(decimals))
         return (x * f).rounded(.toNearestOrEven) / f
     }

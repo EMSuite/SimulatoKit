@@ -42,7 +42,7 @@ detector, the Gaussian source size and Poisson noise on a scan.
 | `core.constants.kappa` | `PhysicalConstants.kappa` | **present** (the same double) | useful |
 | `Grid`, `HasGrid2DMixin` (`extent`, `gpts`, `sampling`, `reciprocal_space_sampling`, `endpoint`) | `Grid(nx:ny:extentX:extentY:)`, `Grid(extentX:extentY:samplingX:samplingY:)`, `.samplingX`/`Y`, `.reciprocalSamplingX`/`Y`, `.matches(_:)` | **partial**: any gpts ≥ 2 on both backends (0.3.0; vDSP where it has a length, a Stockham mixed-radix FFT for other lengths whose prime factors are 2, 3, 5 and 7, Bluestein otherwise; pinned 90 x 75 against abTEM; the mixed-radix path within 4e−16 of the largest term of NumPy `fft2` at 250² and 500², checked against a direct DFT); `sampling=` gives ⌈extent / sampling⌉ points as abTEM; two dimensions, endpoint False only; the reciprocal sampling is abTEM's expression (bit-equal) | study |
 | `core.grid.spatial_frequencies`, NumPy `fftfreq` | `Grid.fftfreq`, `.frequenciesX`/`Y` | **present** (exact today, `SimulatoCoreTests`) | useful |
-| `BaseWaves.angular_sampling`, `.cutoff_angles`, `.antialias_cutoff_gpts`, `.antialias_valid_gpts`, `.rectangle_cutoff_angles`, `.full_cutoff_angles`, `.cutoff_frequencies` | `DiffractionIntensity.angularSampling`, `.cutoffAngles`, `Antialias.cutoffPatternSize(on:)` | **partial**: angular sampling, cutoff angles and the odd cutoff size; the valid size only inside `PixelatedDetector(.valid)`; the rectangle and full cutoff angles and the cutoff frequencies not offered | useful |
+| `BaseWaves.angular_sampling`, `.cutoff_angles`, `.antialias_cutoff_gpts`, `.antialias_valid_gpts`, `.rectangle_cutoff_angles`, `.full_cutoff_angles`, `.cutoff_frequencies` | `DiffractionIntensity.angularSampling`, `.cutoffAngles`, `Antialias.cutoffAngles(on:wavelength:)`, `Antialias.cutoffPatternSize(on:)` | **partial**: angular sampling, cutoff angles (pinned inline on four rounded grids, `tools/pins/simulation-plan/pins.py`) and the odd cutoff size; the valid size only inside `PixelatedDetector(.valid)`; the rectangle and full cutoff angles and the cutoff frequencies not offered | useful |
 | `abtem.config` (dask, device, precision, antialias settings), `abtem.axes` (axis metadata) | | **missing**: not planned: global configuration and ensemble-axis metadata belong to abTEM's lazy array objects; the kit takes explicit arguments | not planned |
 | `abtem.distributions` (parameter distributions for ensembles) | | **missing**: not planned: a caller loops over a parameter and averages (focal series, tilt series) | not planned |
 
@@ -234,6 +234,13 @@ above.
 
 - The Metal backend (`Backend.metal`) and the batched scan (`Multislice.runBatch`), registered against the CPU path; MPSGraph's float32 FFT gain is a known limit
   (`tools/metal-fft-gain`).
+- The simulation plan (`SimulationPlan`, #91): before a run, the sampling from the largest angle the result needs
+  (min(0.05 Å, λ / (3 β)), abTEM's two-thirds antialias band), abTEM's gpts for it rounded up to lengths with factors 2,
+  3 and 5 axis by axis (both samplings at most the rule's), the cutoff angles (about β), slices, steps and FFTs, the GPU memory by the design's table
+  (24 N per batched wave, 4 N per element kernel, 8 N per distinct propagator, 8 N per stored exit) and a time from a
+  measured rate; a plan over 4096², the device's largest buffer or the budget (half of Metal's recommended working set,
+  at most a quarter of the memory) is refused with a coarser sampling that fits. The memory model is not yet checked
+  against measured peaks (#92).
 - The CPU batch on up to `ExecutionOptions.maximumCPUThreads` (8 by default) threads, equal to sequential runs (exact today).
 - Progress and cancellation (0.6.0): `Multislice.run`, `Multislice.runBatch` and `STEM.scan` take a `SimulationProgress`
   handler (at most ten calls a second by default, none after a cancel, no fraction while a run prepares) and stop with

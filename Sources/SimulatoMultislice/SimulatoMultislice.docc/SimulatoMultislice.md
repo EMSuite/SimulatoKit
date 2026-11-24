@@ -10,6 +10,8 @@ One API serves both backends, selected by ``Backend``. `.cpu` is float64 on Acce
 
 ``Potential`` keeps the atoms and slice assignment without the arrays: `.cpu` builds it with ``Potential/build()``, `.metal` builds each slice on the GPU.
 
+``SimulationPlan`` says before a run what it will need: the sampling from the largest angle the result needs, the grid, the slices and steps, the GPU memory and a time from a measured rate, and refuses a run that does not fit with a sampling that would.
+
 See <doc:MetalOnAppleGPUs> for how the Metal path is built and for memory and accuracy pitfalls that apply to any MPSGraph program.
 
 ## Topics
@@ -24,6 +26,12 @@ See <doc:MetalOnAppleGPUs> for how the Metal path is built and for memory and ac
 - ``Multislice``
 - ``Backend``
 - ``ExitPlanes``
+
+### Planning a run
+
+- ``SimulationPlan``
+- ``SimulationLimits``
+- ``SimulationPlanError``
 
 ### Execution options
 

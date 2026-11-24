@@ -56,27 +56,12 @@ public struct DiffractionIntensity: Sendable {
     static func angles(_ m: Int, _ d: Double) -> [Double] { Grid.fftfreq(m, 1 / d / Double(m)) }
 
     /// The antialias cutoff angles [mrad] (abTEM's `cutoff_angles`: ⌊n'/2⌋ Δα, n' the cutoff gpts with the grid's parity).
-    public var cutoffAngles: (x: Double, y: Double) {
-        let g = Self.cutoffGpts(grid)
-        let a = angularSampling
-        return (Double(g.nx / 2) * a.x, Double(g.ny / 2) * a.y)
-    }
+    public var cutoffAngles: (x: Double, y: Double) { Antialias.cutoffAngles(on: grid, wavelength: beam.wavelength) }
 
     /// Cutoff gpts with the grid's own parity (abTEM's `_antialias_cutoff_gpts`).
-    static func cutoffGpts(_ grid: Grid) -> (nx: Int, ny: Int) {
-        let kcut = 2.0 / 3.0 / max(grid.samplingX, grid.samplingY)
-        func size(_ n: Int, _ extent: Double) -> Int {
-            var m = Int(floor(roundToDecimals(kcut * extent, 7)))
-            if m % 2 != n % 2 { m += 1 }
-            return m
-        }
-        return (size(grid.nx, Double(grid.nx) * grid.samplingX), size(grid.ny, Double(grid.ny) * grid.samplingY))
-    }
+    static func cutoffGpts(_ grid: Grid) -> (nx: Int, ny: Int) { Antialias.cutoffGpts(on: grid) }
 
-    static func roundToDecimals(_ x: Double, _ decimals: Int) -> Double {
-        let f = pow(10.0, Double(decimals))
-        return (x * f).rounded(.toNearestOrEven) / f
-    }
+    static func roundToDecimals(_ x: Double, _ decimals: Int) -> Double { Antialias.roundToDecimals(x, decimals) }
 
     /// The pattern cropped to m_x × m_y (abTEM's `fft_crop`) and `fftshift`ed.
     func cropped(_ mx: Int, _ my: Int) -> [Double] {
