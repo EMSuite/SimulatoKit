@@ -28,20 +28,27 @@ extension Multislice {
     /// The exit waves of `incidents` on at most `threads` threads, in rounds of one wave per thread: before each round,
     /// on the calling thread, the task's cancellation is checked (`CancellationError`); after it, `round(first index,
     /// exit waves)` gets the round's waves in order. Each wave is computed exactly as one sequential run computes it.
+    /// `workspace` holds the FFT plans and propagators the rounds reuse; pass one to reuse it across calls (chunks).
     package static func forEachCPURound(_ incidents: [Waves], potential: ProjectedPotential, transmissions: [ComplexField],
-                                        last: Int, threads: Int, round: (Int, [Waves]) throws -> Void) throws {
+                                        last: Int, threads: Int, workspace: CPUWorkspace? = nil,
+                                        round: (Int, [Waves]) throws -> Void) throws {
         let count = incidents.count
         let workers = max(1, min(threads, ProcessInfo.processInfo.activeProcessorCount, count))
+        let workspace = workspace ?? CPUWorkspace(grid: potential.grid)
+        try workspace.reservePlans(workers)
+        let thicknesses = Set(potential.slices.map(\.thickness))
         var first = 0
         while first < count {
             try Task.checkCancellation()
             let size = min(workers, count - first), base = first
+            let propagators = (0..<size).map { workspace.propagators(for: incidents[base + $0], thicknesses: thicknesses) }
             let results = Mutex<[Int: Waves]>([:])
             let failure = Mutex<(any Error)?>(nil)
             DispatchQueue.concurrentPerform(iterations: size) { k in
                 do {
+                    // Plan k is this worker's alone during the round.
                     let w = try runCPU(incidents[base + k], potential: potential, transmissions: transmissions,
-                                       planes: [last])[0]
+                                       planes: [last], fft: workspace.plan(k), propagators: propagators[k])[0]
                     results.withLock { $0[k] = w }
                 } catch {
                     failure.withLock { if $0 == nil { $0 = error } }
@@ -72,15 +79,9 @@ extension Multislice {
         var reporter = ProgressReporter(progress, interval: options.progressInterval)
         reporter.report(batchPreparing(incidents.count))
         try Task.checkCancellation()
-        switch backend {
-        case .cpu:
-            return try cpuBatch(incidents, potential, options, &reporter)
-        case .metal:
-            let engine = try MetalEngine.require()
-            let prepared = try MetalMultislice.prepare(potential, beam: first.beam, tilt: try sharedTilt(incidents),
-                                                       engine: engine)
-            return try metalBatch(incidents, prepared, options, &reporter)
-        }
+        let tilt = backend == .metal ? try sharedTilt(incidents) : first.tilt
+        let prepared = try prepareBatch(potential, beam: first.beam, tilt: tilt, backend: backend)
+        return try runPrepared(incidents, prepared, options, &reporter)
     }
 
     /// The same for a `Potential`: on `.cpu` built first (`build()`), on `.metal` built slice by slice on the GPU.
@@ -93,16 +94,70 @@ extension Multislice {
         var reporter = ProgressReporter(progress, interval: options.progressInterval)
         reporter.report(batchPreparing(incidents.count))
         try Task.checkCancellation()
+        let tilt = backend == .metal ? try sharedTilt(incidents) : first.tilt
+        let prepared = try prepareBatch(potential, beam: first.beam, tilt: tilt, backend: backend)
+        return try runPrepared(incidents, prepared, options, &reporter)
+    }
+
+    /// `potential` made ready once for many batches of `beam`'s energy (and, on `.metal`, of `tilt`): on `.cpu` the
+    /// transmission functions and a workspace of FFT plans and propagators, on `.metal` the slices on the GPU. A scan
+    /// that runs its positions in chunks prepares once and runs every chunk with `runBatch(_:prepared:options:progress:)`.
+    package static func prepareBatch(_ potential: ProjectedPotential, beam: ElectronBeam, tilt: SIMD2<Double>,
+                                     backend: Backend) throws -> PreparedBatch {
+        switch backend {
+        case .cpu:
+            let transmissions = try transmissionFunctions(potential, beam: beam)
+            return PreparedBatch(storage: .cpu(potential, transmissions, CPUWorkspace(grid: potential.grid)),
+                                 grid: potential.grid, energy: beam.energy, tilt: tilt)
+        case .metal:
+            let engine = try MetalEngine.require()
+            let prepared = try MetalMultislice.prepare(potential, beam: beam, tilt: tilt, engine: engine)
+            return PreparedBatch(storage: .metal(prepared), grid: potential.grid, energy: beam.energy, tilt: tilt)
+        }
+    }
+
+    /// The same for a `Potential`: on `.cpu` built here (`build()`), on `.metal` built slice by slice on the GPU.
+    package static func prepareBatch(_ potential: Potential, beam: ElectronBeam, tilt: SIMD2<Double>,
+                                     backend: Backend) throws -> PreparedBatch {
         switch backend {
         case .cpu:
             let built = try potential.build()
             try Task.checkCancellation()
-            return try cpuBatch(incidents, built, options, &reporter)
+            return try prepareBatch(built, beam: beam, tilt: tilt, backend: .cpu)
         case .metal:
             let engine = try MetalEngine.require()
-            let prepared = try MetalMultislice.prepare(potential, beam: first.beam, tilt: try sharedTilt(incidents),
-                                                       engine: engine)
-            return try metalBatch(incidents, prepared, options, &reporter)
+            let prepared = try MetalMultislice.prepare(potential, beam: beam, tilt: tilt, engine: engine)
+            return PreparedBatch(storage: .metal(prepared), grid: potential.grid, energy: beam.energy, tilt: tilt)
+        }
+    }
+
+    /// The exit waves of a batch through a prepared potential, as `runBatch(_:through:backend:options:progress:)`
+    /// computes them.
+    /// - Throws: `SimulatoError.gridMismatch`, `mixedEnergies` for a wave of another energy than the preparation's,
+    ///   `invalidTilt` on `.metal` for a wave of another tilt.
+    package static func runBatch(_ incidents: [Waves], prepared: PreparedBatch, options: ExecutionOptions = .standard,
+                                 progress: SimulationProgressHandler? = nil) throws -> [Waves] {
+        guard let first = incidents.first else { return [] }
+        for w in incidents where !w.grid.matches(prepared.grid) { throw SimulatoError.gridMismatch }
+        try checkSharedEnergy(incidents)
+        guard first.beam.energy == prepared.energy else {
+            throw SimulatoError.mixedEnergies(first: prepared.energy, other: first.beam.energy)
+        }
+        if case .metal = prepared.storage, try sharedTilt(incidents) != prepared.tilt {
+            throw SimulatoError.invalidTilt("the waves of a .metal batch must have the tilt its potential was prepared for")
+        }
+        var reporter = ProgressReporter(progress, interval: options.progressInterval)
+        try Task.checkCancellation()
+        return try runPrepared(incidents, prepared, options, &reporter)
+    }
+
+    static func runPrepared(_ incidents: [Waves], _ prepared: PreparedBatch, _ options: ExecutionOptions,
+                            _ reporter: inout ProgressReporter) throws -> [Waves] {
+        switch prepared.storage {
+        case .cpu(let potential, let transmissions, let workspace):
+            return try cpuBatch(incidents, potential, transmissions, workspace, options, &reporter)
+        case .metal(let metal):
+            return try metalBatch(incidents, metal, options, &reporter)
         }
     }
 
@@ -110,14 +165,15 @@ extension Multislice {
         SimulationProgress(stage: .preparing, completed: 0, total: count, unit: .positions, fraction: nil)
     }
 
-    static func cpuBatch(_ incidents: [Waves], _ potential: ProjectedPotential, _ options: ExecutionOptions,
+    static func cpuBatch(_ incidents: [Waves], _ potential: ProjectedPotential, _ transmissions: [ComplexField],
+                         _ workspace: CPUWorkspace, _ options: ExecutionOptions,
                          _ reporter: inout ProgressReporter) throws -> [Waves] {
-        let transmissions = try transmissionFunctions(potential, beam: incidents[0].beam)
         let count = incidents.count
         var out: [Waves] = []
         out.reserveCapacity(count)
         try forEachCPURound(incidents, potential: potential, transmissions: transmissions,
-                            last: potential.slices.count - 1, threads: options.maximumCPUThreads) { _, waves in
+                            last: potential.slices.count - 1, threads: options.maximumCPUThreads,
+                            workspace: workspace) { _, waves in
             out += waves
             reporter.report(SimulationProgress(stage: .propagating, completed: out.count, total: count, unit: .positions,
                                                fraction: Double(out.count) / Double(count)))

@@ -132,9 +132,9 @@ extension STEM {
         guard potentials.count == 1 else { throw WavesDetectorError.severalPotentials(potentials.count) }
         guard potentials[0].grid.matches(probe.grid) else { throw SimulatoError.gridMismatch }
         try checkMemory(probe: probe, scan: scan, detector: detector, limit: memoryLimit)
-        let potential = potentials[0]
+        let prepared = try Multislice.prepareBatch(potentials[0], beam: probe.beam, tilt: probe.tilt, backend: backend)
         return try collect(probe: probe, scan: scan, detector: detector, options: options) { incidents in
-            try Multislice.runBatch(incidents, through: potential, backend: backend, options: options)
+            try Multislice.runBatch(incidents, prepared: prepared, options: options)
         }
     }
 
@@ -145,9 +145,9 @@ extension STEM {
         guard potentials.count == 1 else { throw WavesDetectorError.severalPotentials(potentials.count) }
         guard potentials[0].grid.matches(probe.grid) else { throw SimulatoError.gridMismatch }
         try checkMemory(probe: probe, scan: scan, detector: detector, limit: memoryLimit)
-        let potential = potentials[0]
+        let prepared = try Multislice.prepareBatch(potentials[0], beam: probe.beam, tilt: probe.tilt, backend: backend)
         return try collect(probe: probe, scan: scan, detector: detector, options: options) { incidents in
-            try Multislice.runBatch(incidents, through: potential, backend: backend, options: options)
+            try Multislice.runBatch(incidents, prepared: prepared, options: options)
         }
     }
 
@@ -166,8 +166,9 @@ extension STEM {
         for p in potentials where !p.grid.matches(probe.grid) { throw SimulatoError.gridMismatch }
         try checkMemory(probe: probe, scan: scan, detector: detector, limit: memoryLimit, configurations: potentials.count)
         return try potentials.map { potential in
-            try collect(probe: probe, scan: scan, detector: detector, options: options) { incidents in
-                try Multislice.runBatch(incidents, through: potential, backend: backend, options: options)
+            let prepared = try Multislice.prepareBatch(potential, beam: probe.beam, tilt: probe.tilt, backend: backend)
+            return try collect(probe: probe, scan: scan, detector: detector, options: options) { incidents in
+                try Multislice.runBatch(incidents, prepared: prepared, options: options)
             }
         }
     }
@@ -181,8 +182,9 @@ extension STEM {
         for p in potentials where !p.grid.matches(probe.grid) { throw SimulatoError.gridMismatch }
         try checkMemory(probe: probe, scan: scan, detector: detector, limit: memoryLimit, configurations: potentials.count)
         return try potentials.map { potential in
-            try collect(probe: probe, scan: scan, detector: detector, options: options) { incidents in
-                try Multislice.runBatch(incidents, through: potential, backend: backend, options: options)
+            let prepared = try Multislice.prepareBatch(potential, beam: probe.beam, tilt: probe.tilt, backend: backend)
+            return try collect(probe: probe, scan: scan, detector: detector, options: options) { incidents in
+                try Multislice.runBatch(incidents, prepared: prepared, options: options)
             }
         }
     }
@@ -214,7 +216,8 @@ extension STEM {
         re.reserveCapacity(need / 16)
         im.reserveCapacity(need / 16)
         var template: Waves?
-        // Chunks as the measurement scan: the incident and exit waves of one chunk only, besides the result.
+        // Chunks as the measurement scan: the incident and exit waves of one chunk only, besides the result; `run` goes
+        // through a potential prepared once for the scan.
         let chunk = max(1, options.scanChunkBytes / (probe.grid.count * 16 * 2))
         for first in stride(from: 0, to: positions.count, by: chunk) {
             let incidents = try positions[first..<min(first + chunk, positions.count)].map { try probe.build(at: $0) }

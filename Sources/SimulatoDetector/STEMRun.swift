@@ -151,6 +151,8 @@ public struct STEMRun: Sendable {
         // Positions in chunks of `options.scanChunkBytes`, so the waves of one chunk only are held (13 MB per position
         // at 480²).
         let chunk = max(1, options.scanChunkBytes / (probe.grid.count * 16 * 2))
+        // One workspace (FFT plans and propagators) for every chunk of the configuration.
+        let workspace = CPUWorkspace(grid: potential.grid)
         let probe = probe, positions = positions, detectors = detectors, counts = counts
         var sums: [[Double]] = []
         swap(&sums, &self.sums)
@@ -160,7 +162,8 @@ public struct STEMRun: Sendable {
             let incidents = try (first..<min(first + chunk, positions.count)).map { try probe.build(at: positions[$0]) }
             try Multislice.forEachCPURound(incidents, potential: potential, transmissions: transmissions,
                                            last: potential.slices.count - 1,
-                                           threads: options.maximumCPUThreads) { base, waves in
+                                           threads: options.maximumCPUThreads,
+                                           workspace: workspace) { base, waves in
                 for (offset, exit) in waves.enumerated() {
                     try STEM.accumulate(DiffractionIntensity(exit), at: first + base + offset, detectors, counts, &sums)
                 }
