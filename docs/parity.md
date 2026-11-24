@@ -4,8 +4,8 @@ The coverage table of abTEM 1.0.10 (`References/python/abtem`, git `164e644`): i
 the source in `site-packages/abtem` against SimulatoKit. Rewritten for 0.3.0 (the growing phase's kit audit); every row
 has one state and one priority.
 
-**Totals (131 rows): 39 present, 42 partial, 50 missing.** By priority: **study** 27 rows (12 present, 8 partial, 7 missing);
-**useful** 82 (27, 34, 21); **not planned** 22 (all missing, each with its reason).
+**Totals (131 rows): 39 present, 43 partial, 49 missing.** By priority: **study** 27 rows (12 present, 8 partial, 7 missing);
+**useful** 82 (27, 35, 20); **not planned** 22 (all missing, each with its reason).
 
 States:
 
@@ -173,7 +173,7 @@ detector, the Gaussian source size and Poisson noise on a scan.
 | `PolarMeasurements` (`integrate`, `integrate_radial`, `differentials`, `to_diffraction_patterns`) | `ScanMeasurement.integrate(detectorRegions:)`, `.integrate(detector:)`, `.integrateRadial(inner:outer:detector:)`, `.differentials(direction1:direction2:)` on a `SegmentedDetector` scan | **partial**: regions, radial limits (truncated to bins as abTEM) and the DPC differentials (second regions minus first, abTEM's order) against abTEM on a planted scan, float64 sums at rtol 1e-7, differentials at 1e-6 (abTEM complex64); the differentials come as two scans, not one complex image; `azimuthal_limits` not offered (abTEM divides them by the radial sampling), `to_diffraction_patterns` not offered; refused where abTEM is silent: no region (abTEM: zeros), a region or radial index below 0 (Python reads it from the end) | useful |
 | `RealSpaceLineProfiles`, `ReciprocalSpaceLineProfiles`, `_BaseMeasurement1D.width`, `.interpolate` | `RealSpaceLineProfiles`, `ReciprocalSpaceLineProfiles`, `LineProfiles.width(height:)`, `.interpolate(sampling:gpts:order:endpoint:)`, `ScanMeasurement.lineProfiles(for:)` | **present**: width to 4.5e-8 and interpolate to 5.5e-8 of the maximum against abTEM (abTEM stores both as float32; `assert_allclose` rtol 1e-7 holds at 0.6 of its bound), on the scan's profile and on planted profiles with ensemble axes, orders 0 to 5, both endpoints; `lineProfiles` only for detectors of one number or a vector (abTEM returns other measurement types for segmented and pixelated); `RealSpaceLineProfiles.tile`, `ReciprocalSpaceLineProfiles.angular_extent`, `show` and the lazy path not offered | useful |
 | `MeasurementsEnsemble`, `BaseMeasurements.to_measurement_ensemble`, `normalize_ensemble` | | **missing**: not planned: Swift arrays; a caller keeps the configurations apart | not planned |
-| `IndexedDiffractionPatterns`, `DiffractionPatterns.index_diffraction_spots` | | **missing**: planned: with DiffractoKit's indexing | useful |
+| `IndexedDiffractionPatterns`, `DiffractionPatterns.index_diffraction_spots` | `BeamIntensities(exitWaves:of:exitPlanes:)` (`beams`, `thicknesses`, `intensities`, `intensities(of:)`), `BeamIntensities.frequencyIndex(of:in:)`, `.hkl(atFrequencyIndex:in:)` | **partial** (0.6.0): the zero-order Laue zone beams of a `Slab`'s exit waves named by the crystal's hkl through the slab's integer supercell matrix (exact integers), at every stored thickness, the one pixel a reflection falls in (abTEM's default, no `radius`). Pinned (`tools/pins/beam-intensities/pins.py`) against `index_diffraction_spots` with the strained cell of the box on Si [110], Si [111] and Mg [0001], 200 kV, five thicknesses from 2 to 100 nm: hkl sets and pixels exact, intensities within 1e−10 of the incident beam with `.abTEMFloat32` (the exit-wave pin); the forbidden 002 of Si [110] grows from zero. Method: multislice (Cowley and Moodie, Acta Cryst. 10 (1957) 609) as abTEM's (Madsen and Susi, Open Res. Europe 1 (2021) 24). Not offered: `radius` (a disc), `sg_max`, `centering`, orientation matrices, higher-order Laue zone labels (below) | useful |
 | `BaseMeasurements.intensity()` | `Waves.intensity()`, `ComplexField.squaredMagnitude()` | **present** | useful |
 | `BaseMeasurements.real()`, `.imag()` | `ComplexField.real`, `.imaginary` | **partial**: raw arrays, not measurements | useful |
 | `BaseMeasurements.phase()`, `.abs()` | | **missing**: planned: SimulatoCore | useful |
@@ -259,6 +259,7 @@ above.
   with the least strain found); coordinates within 1e−6 Å of a face set on it; slices that repeat with the period
   (⌈period / s⌉ per period) and a shift along z of j h / 720 that keeps every atomic plane farthest from a slice boundary
   (0.48 Å on Si [110] with slices of 0.96 Å).
+- Beam intensities by hkl (0.6.0): only beams of the zero-order Laue zone ((V hkl)_z = 0), within the cutoff pattern and |g| at most its largest frequency (abTEM's default `g_max`). abTEM labels each pixel with the indexed reflection of smallest excitation error, which near the first-order Laue ring can be a higher-order reflection that projects onto the same pixel; the kit names the pixel by its zero-order hkl (the value is the same pixel). abTEM's default `sg_max` (`estimate_necessary_excitation_error`) leaves zero-order beams beyond about √(2 g_max) unindexed; the pin passes λ g_max² / 2 so every one is. The pinned cases have no pixel where the two labels differ.
 ## Known limits and decisions
 
 Open work is in the [issues](https://github.com/EMSuite/SimulatoKit/issues), including the ones closed as *not planned*
