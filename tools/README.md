@@ -53,9 +53,11 @@ committed fixtures were written on a Mac; Linux reproduces them to float noise (
 | `pins/flexible-annular/pins.py` | `flexible-annular-pins.json`, `flexible-annular-arrays.bin` (imports `potential-multislice`, `stem-detectors`, `beam-intensities`) |
 | `pins/cbed-series/pins.py` | `cbed-series-pins.json`, `cbed-series-arrays.bin` (imports `potential-multislice`, `stem-detectors`, `beam-intensities`) |
 | `pins/hrtem-si110/pins.py` | `hrtem-si110-pins.json`, `hrtem-si110-arrays.bin` (imports `potential-multislice`, `ctf`, `beam-intensities`) |
+| `pins/atom-models/pins.py` | `atom-models-pins.json`, `atom-models-arrays.bin` (imports `potential-multislice`) |
 | `pins/potential-project-tile/pins.py` | none: prints the numbers `SimulatoMultisliceTests/PotentialProjectTileTests.swift` holds inline |
 | `pins/polar/pins.py` | none: prints the numbers `SimulatoDetectorTests/PolarMeasurementTests.swift` holds inline |
 | `pins/crystal-slices/pins.py` | none: prints the numbers `SimulatoMultisliceTests/CrystalSliceThicknessTests.swift` holds inline |
+| `pins/image-crop-difference/pins.py` | none: prints the numbers `SimulatoCoreTests/ImageComparisonTests.swift` holds inline |
 | `pins/image-interpolate/pins.py` | none: prints the numbers `SimulatoCoreTests/ImageInterpolationTests.swift` holds inline |
 | `pins/image-gaussian/pins.py` | none: prints the numbers `SimulatoCoreTests/ImageGaussianFilterTests.swift` holds inline |
 | `pins/simulation-plan/pins.py` | none: prints the numbers `SimulatoMultisliceTests/SimulationPlanTests.swift` holds inline |
