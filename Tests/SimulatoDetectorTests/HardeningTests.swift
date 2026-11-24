@@ -44,6 +44,18 @@ struct DetectorHardeningTests {
         }
     }
 
+    /// Negative axes whose product is the number of positions used to pass the check and trap after the whole scan (#128).
+    @Test func negativeScanAxesAreRefusedBeforeTheSimulation() throws {
+        let (probe, potential) = try setup()
+        let detector = try AnnularDetector(inner: 0, outer: 10)
+        let six = (1...6).map { SIMD2<Double>(Double($0) * 0.5, 1) }
+        for scan in [BadScan(positions: [SIMD2(1, 1)], shape: [-1, -1]), BadScan(positions: six, shape: [-2, -3])] {
+            #expect(throws: SimulatoError.self) {
+                try STEM.scan(probe: probe, potentials: [potential], scan: scan, detectors: [detector])
+            }
+        }
+    }
+
     @Test func overflowingWaveScanIsTyped() throws {
         let (probe, potential) = try setup()
         let scan = try GridScan(start: SIMD2(0, 0), end: SIMD2(4, 4), nx: 1 << 40, ny: 1 << 40)

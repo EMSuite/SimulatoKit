@@ -6,6 +6,55 @@ what a consumer must change under **Migration**. Every version below is a git ta
 release-please writes each entry from the merged pull requests' titles, and a breaking change's Migration is its
 `BREAKING CHANGE:` note.
 
+## [0.6.0](https://github.com/EMSuite/SimulatoKit/compare/0.5.0...0.6.0) (2026-11-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* initialisers throw invalidShape instead of trapping on caller data ([#82](https://github.com/EMSuite/SimulatoKit/issues/82))
+* Kirkland parameterisation, chosen by Parameterization ([#79](https://github.com/EMSuite/SimulatoKit/issues/79))
+
+### Features
+
+* a crystal cell and its orthogonal slab along a zone axis ([#73](https://github.com/EMSuite/SimulatoKit/issues/73)) ([9cb3cfc](https://github.com/EMSuite/SimulatoKit/commit/9cb3cfcbd6274ead57418c07f7a8a1f0b0155c56))
+* a Gaussian filter on images, as abTEM's Images.gaussian_filter ([#106](https://github.com/EMSuite/SimulatoKit/issues/106)) ([b26bf50](https://github.com/EMSuite/SimulatoKit/commit/b26bf501b7758b66175f69fb1cc7a06c1b0d41c1)), closes [#105](https://github.com/EMSuite/SimulatoKit/issues/105)
+* an HRTEM image series over defocus and thickness from stored exit waves ([#90](https://github.com/EMSuite/SimulatoKit/issues/90)) ([407cf77](https://github.com/EMSuite/SimulatoKit/commit/407cf7797870b556b7903635b9f7ec725e354652))
+* beam intensities by hkl from the exit wave of a slab, at every stored thickness ([#98](https://github.com/EMSuite/SimulatoKit/issues/98)) ([65f93cf](https://github.com/EMSuite/SimulatoKit/commit/65f93cf7d281ac157f2c4ab0b3ec65285c2ca584))
+* crop an image and its relative difference to another, as abTEM's Images.crop and relative_difference ([#110](https://github.com/EMSuite/SimulatoKit/issues/110)) ([72e0f93](https://github.com/EMSuite/SimulatoKit/commit/72e0f935eb002522bcc748fd2b94279be85ab9e9))
+* initialisers throw invalidShape instead of trapping on caller data ([#82](https://github.com/EMSuite/SimulatoKit/issues/82)) ([dd2c17d](https://github.com/EMSuite/SimulatoKit/commit/dd2c17d3f6d5068898c802bbe8901c490fa95eb4))
+* Kirkland parameterisation, chosen by Parameterization ([#79](https://github.com/EMSuite/SimulatoKit/issues/79)) ([abf6fb5](https://github.com/EMSuite/SimulatoKit/commit/abf6fb52ff882f6d7126d68295dbddaa32a5202b))
+* plan a simulation's sampling, grid, memory and time before it runs ([#93](https://github.com/EMSuite/SimulatoKit/issues/93)) ([3c4c99c](https://github.com/EMSuite/SimulatoKit/commit/3c4c99cb7b57ff75d698935a5968790f6610b9b8))
+* progress and cancellation in multislice and scans ([#77](https://github.com/EMSuite/SimulatoKit/issues/77)) ([0e678b4](https://github.com/EMSuite/SimulatoKit/commit/0e678b4b5c5a1ae1ab94e80f5a35ca82fd33c8b6))
+* the HRTEM image series on Metal ([#104](https://github.com/EMSuite/SimulatoKit/issues/104)) ([b224ac2](https://github.com/EMSuite/SimulatoKit/commit/b224ac239637d841f00fb7aa148aecfa5a23b0ad))
+* the simulation plan's memory counts the potential, the scan and a cold run's workspace ([#101](https://github.com/EMSuite/SimulatoKit/issues/101)) ([dea983d](https://github.com/EMSuite/SimulatoKit/commit/dea983d389d5e4f686f5768736d43f8b7427cbf5))
+* thermal vibration amplitude per site, with the B and σ conversions ([#96](https://github.com/EMSuite/SimulatoKit/issues/96)) ([8f45df8](https://github.com/EMSuite/SimulatoKit/commit/8f45df87906e8df2f3d4cf795d4cb27bf5672364))
+* transfer function profiles and the CTF's own Scherzer defocus, point resolution and crossover angle ([#103](https://github.com/EMSuite/SimulatoKit/issues/103)) ([2013c94](https://github.com/EMSuite/SimulatoKit/commit/2013c945ab9ec05b32358f56941a35e7937c6e77)), closes [#102](https://github.com/EMSuite/SimulatoKit/issues/102)
+
+
+### Bug Fixes
+
+* a custom scan pattern with negative axes is refused before the scan, not a trap after it ([#131](https://github.com/EMSuite/SimulatoKit/issues/131)) ([a2eaedf](https://github.com/EMSuite/SimulatoKit/commit/a2eaedfda1040fd2bfe4ebc72ca0052234b176e4))
+* a mixed-energy batch is refused and a CTF keeps the wave's tilt ([#78](https://github.com/EMSuite/SimulatoKit/issues/78)) ([883364f](https://github.com/EMSuite/SimulatoKit/commit/883364fafa4752b226612aec61ad0352317e39a0))
+* a STEM scan too large for memory is refused before anything is allocated ([#85](https://github.com/EMSuite/SimulatoKit/issues/85)) ([1a4fa64](https://github.com/EMSuite/SimulatoKit/commit/1a4fa6421ba0acbe28fee674666e339270ac9d66))
+* build on Xcode 27, where Foundation's ProgressReporter clashes with the kit's ([#99](https://github.com/EMSuite/SimulatoKit/issues/99)) ([0b7852f](https://github.com/EMSuite/SimulatoKit/commit/0b7852f4a4a5806e980fac7a2e43de2b556a8f84))
+* refuse values that hung or trapped Poisson noise, source size, detectors and Metal ([#81](https://github.com/EMSuite/SimulatoKit/issues/81)) ([0e6b1c2](https://github.com/EMSuite/SimulatoKit/commit/0e6b1c2a62b3eb4724a21946b1a5430440220713))
+
+
+### Performance Improvements
+
+* chunked scans prepare each potential once and reuse FFT plans and propagators ([#83](https://github.com/EMSuite/SimulatoKit/issues/83)) ([29459a1](https://github.com/EMSuite/SimulatoKit/commit/29459a11eda542b127b5b0b0a18df83ca9cc8707))
+* scans compute the probe's aperture and aberration phase once, not per position ([#84](https://github.com/EMSuite/SimulatoKit/issues/84)) ([4931544](https://github.com/EMSuite/SimulatoKit/commit/493154419591f8c1103c4d1cbfd9a5d554779b91))
+* the azimuthal average adds each pixel to the rings near its radius only ([#113](https://github.com/EMSuite/SimulatoKit/issues/113)) ([62f6e24](https://github.com/EMSuite/SimulatoKit/commit/62f6e24263b742030cf6beec3fef51359d957ea9))
+* the CPU potential sorts its atoms into slices and elements in one pass ([#86](https://github.com/EMSuite/SimulatoKit/issues/86)) ([da9d6dd](https://github.com/EMSuite/SimulatoKit/commit/da9d6dd2a285425e1d4df1ff4616dc4d0b22e43e))
+
+
+### Fixtures and tests
+
+* reference pins for a CBED thickness series ([#112](https://github.com/EMSuite/SimulatoKit/issues/112)) ([2e58364](https://github.com/EMSuite/SimulatoKit/commit/2e58364f99486eb932995d93b8678d598834daa5))
+* reference pins for a specimen from an atom model ([#118](https://github.com/EMSuite/SimulatoKit/issues/118)) ([59079dc](https://github.com/EMSuite/SimulatoKit/commit/59079dc6e837ee75574e4b94acc28a51fcc3f7d5))
+* reference pins for the flexible annular detector ([#109](https://github.com/EMSuite/SimulatoKit/issues/109)) ([a2902f1](https://github.com/EMSuite/SimulatoKit/commit/a2902f186acd00cf499333cc1f2cac409aa30517))
+* reference pins for the Si [110] HRTEM image chain ([#115](https://github.com/EMSuite/SimulatoKit/issues/115)) ([47587b0](https://github.com/EMSuite/SimulatoKit/commit/47587b04cc6ef9c0e454164daf8ba9ce166b9a1c))
+
 ## [0.5.0](https://github.com/mac4DSTEM/SimulatoKit/compare/0.4.0...0.5.0) (2026-10-31)
 
 
