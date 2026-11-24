@@ -78,6 +78,8 @@ extension Multislice {
         package init() {}
 
         package var preparationCount: Int { preparations.withLock { $0 } }
+        /// Counts one preparation (callers need not import Synchronization).
+        func countPreparation() { preparations.withLock { $0 += 1 } }
         package var fftPlanCount: Int { fftPlans.withLock { $0 } }
     }
 
