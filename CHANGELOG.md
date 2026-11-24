@@ -6,6 +6,13 @@ what a consumer must change under **Migration**. Every version below is a git ta
 release-please writes each entry from the merged pull requests' titles, and a breaking change's Migration is its
 `BREAKING CHANGE:` note.
 
+## [0.7.1](https://github.com/EMSuite/SimulatoKit/compare/0.7.0...0.7.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* the azimuthal average of a tiny radial sampling no longer traps ([#132](https://github.com/EMSuite/SimulatoKit/issues/132)) ([182f4ba](https://github.com/EMSuite/SimulatoKit/commit/182f4ba192fcfd8bcc2db78ffc1490ec50f3a171))
+
 ## [0.7.0](https://github.com/EMSuite/SimulatoKit/compare/0.6.0...0.7.0) (2026-11-24)
 
 
