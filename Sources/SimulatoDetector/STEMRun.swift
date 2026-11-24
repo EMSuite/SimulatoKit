@@ -154,12 +154,13 @@ public struct STEMRun: Sendable {
         // One workspace (FFT plans and propagators) for every chunk of the configuration.
         let workspace = CPUWorkspace(grid: potential.grid)
         let probe = probe, positions = positions, detectors = detectors, counts = counts
+        let builder = try ProbeBuilder(probe)
         var sums: [[Double]] = []
         swap(&sums, &self.sums)
         defer { swap(&sums, &self.sums) }
         while completedPositions < positions.count {
             let first = completedPositions
-            let incidents = try (first..<min(first + chunk, positions.count)).map { try probe.build(at: positions[$0]) }
+            let incidents = try (first..<min(first + chunk, positions.count)).map { try builder.build(at: positions[$0]) }
             try Multislice.forEachCPURound(incidents, potential: potential, transmissions: transmissions,
                                            last: potential.slices.count - 1,
                                            threads: options.maximumCPUThreads,

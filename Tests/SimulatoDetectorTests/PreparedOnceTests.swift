@@ -2,7 +2,8 @@
 //  PreparedOnceTests.swift
 //  Role: scans run in chunks of positions prepare each potential once (#61): a WavesDetector scan builds its
 //        transmission functions once, not once per chunk, a CPU STEM run makes its FFT plans once for every chunk, and
-//        the numbers do not change (bit for bit against one chunk). A prepared batch refuses another energy or grid.
+//        the numbers do not change (bit for bit against one chunk). The probe's aperture and aberration phase are
+//        computed once per scan, not once per position. A prepared batch refuses another energy or grid.
 //
 
 import Testing
@@ -25,9 +26,9 @@ struct PreparedOnceTests {
     /// One position per chunk (and per CPU round).
     static let onePerChunk = ExecutionOptions(maximumCPUThreads: 2, scanChunkBytes: 1)
 
-    static func counting<T>(_ body: () throws -> T) rethrows -> (T, Multislice.WorkCounter) {
-        let counter = Multislice.WorkCounter()
-        let value = try Multislice.$workCounter.withValue(counter) { try body() }
+    static func counting<T>(_ body: () throws -> T) rethrows -> (T, WorkCounter) {
+        let counter = WorkCounter()
+        let value = try WorkCounter.$current.withValue(counter) { try body() }
         return (value, counter)
     }
 
@@ -37,8 +38,9 @@ struct PreparedOnceTests {
         let (chunked, counter) = try Self.counting {
             try STEM.scan(probe: probe, potentials: [built], scan: scan, detector: WavesDetector(), options: Self.onePerChunk)
         }
-        // Six chunks of one position: one preparation (it was six).
+        // Six chunks of one position: one preparation and one probe spectrum (each was six).
         #expect(counter.preparationCount == 1)
+        #expect(counter.probeSpectrumCount == 1)
         let (lazy, lazyCounter) = try Self.counting {
             try STEM.scan(probe: probe, potentials: [potential], scan: scan, detector: WavesDetector(), options: Self.onePerChunk)
         }
@@ -69,6 +71,7 @@ struct PreparedOnceTests {
         // One position per chunk, so one worker: one plan for the six chunks, one preparation.
         #expect(counter.fftPlanCount == 1)
         #expect(counter.preparationCount == 1)
+        #expect(counter.probeSpectrumCount == 1)
         let whole = try STEM.scan(probe: probe, potentials: [potential], scan: scan, detectors: detectors)
         #expect(chunked.map(\.values) == whole.map(\.values))
     }

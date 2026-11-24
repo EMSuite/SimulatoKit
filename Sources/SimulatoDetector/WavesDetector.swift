@@ -219,8 +219,9 @@ extension STEM {
         // Chunks as the measurement scan: the incident and exit waves of one chunk only, besides the result; `run` goes
         // through a potential prepared once for the scan.
         let chunk = max(1, options.scanChunkBytes / (probe.grid.count * 16 * 2))
+        let builder = try ProbeBuilder(probe)
         for first in stride(from: 0, to: positions.count, by: chunk) {
-            let incidents = try positions[first..<min(first + chunk, positions.count)].map { try probe.build(at: $0) }
+            let incidents = try positions[first..<min(first + chunk, positions.count)].map { try builder.build(at: $0) }
             for exit in try run(incidents) {
                 let w = try detector.detect(exit)
                 re.append(contentsOf: w.field.real)
