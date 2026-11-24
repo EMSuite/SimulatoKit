@@ -59,7 +59,7 @@ public enum Multislice {
                            progress: SimulationProgressHandler? = nil) throws -> [Waves] {
         guard incident.grid.matches(potential.grid) else { throw SimulatoError.gridMismatch }
         let planes = try exitPlanes.planes(sliceCount: potential.slices.count)
-        var reporter = ProgressReporter(progress, interval: options.progressInterval)
+        var reporter = SimulationProgressReporter(progress, interval: options.progressInterval)
         reporter.report(preparing(slices: potential.slices.count))
         try Task.checkCancellation()
         switch backend {
@@ -78,7 +78,7 @@ public enum Multislice {
                            progress: SimulationProgressHandler? = nil) throws -> [Waves] {
         guard incident.grid.matches(potential.grid) else { throw SimulatoError.gridMismatch }
         let planes = try exitPlanes.planes(sliceCount: potential.sliceCount)
-        var reporter = ProgressReporter(progress, interval: options.progressInterval)
+        var reporter = SimulationProgressReporter(progress, interval: options.progressInterval)
         reporter.report(preparing(slices: potential.sliceCount))
         try Task.checkCancellation()
         switch backend {
@@ -103,7 +103,7 @@ public enum Multislice {
     }
 
     static func runCPUReporting(_ incident: Waves, potential: ProjectedPotential, planes: [Int],
-                                reporter: inout ProgressReporter) throws -> [Waves] {
+                                reporter: inout SimulationProgressReporter) throws -> [Waves] {
         let transmissions = try transmissionFunctions(potential, beam: incident.beam)
         let n = potential.slices.count
         return try runCPU(incident, potential: potential, transmissions: transmissions, planes: planes) { j in
@@ -113,7 +113,7 @@ public enum Multislice {
     }
 
     static func runMetalReporting(_ incident: Waves, prepared: MetalPreparedPotential, planes: [Int],
-                                  options: ExecutionOptions, reporter: inout ProgressReporter) throws -> [Waves] {
+                                  options: ExecutionOptions, reporter: inout SimulationProgressReporter) throws -> [Waves] {
         let n = prepared.sliceCount
         return try MetalMultislice.run(incident, prepared: prepared, planes: planes, options: options) { done in
             reporter.report(propagating(done, of: n))
