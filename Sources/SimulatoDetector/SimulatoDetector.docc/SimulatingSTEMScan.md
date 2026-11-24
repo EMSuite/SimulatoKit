@@ -88,7 +88,7 @@ let icom = try com.integratedCenterOfMass(samplingX: structure.box.x / 32, sampl
 
 ### Frozen-phonon averaging
 
-Thermal displacement is simulated by averaging intensities over configurations of the structure. `FrozenPhonons` draws a displacement for every atom from a Gaussian of standard deviation σ per element (in Å), with a seeded generator, so the same seed gives the same ensemble on every platform. Pass the resulting potentials to `STEM.scan` and each detector value is averaged over them.
+Thermal displacement is simulated by averaging intensities over configurations of the structure. `FrozenPhonons` draws a displacement for every atom from a Gaussian of standard deviation σ per axis (in Å), given per element or per site, with a seeded generator, so the same seed gives the same ensemble on every platform. Pass the resulting potentials to `STEM.scan` and each detector value is averaged over them.
 
 ```swift
 import SimulatoMultislice
@@ -101,7 +101,7 @@ let averaged = try STEM.scan(probe: probe, potentials: potentials, scan: scan,
                              backend: .metal)[0]
 ```
 
-(`sigmas` maps the atomic number to σ; every element of the structure needs an entry. Use `potentials(nx:ny:sliceThickness:)` instead for built potentials.) The average is of intensities, taken after the detector: each position's values are summed over configurations in potential order and divided by the number of potentials.
+(`sigmas` maps the atomic number to σ; every element of the structure needs an entry. `siteSigmas:` takes one σ per atom instead, in the structure's atom order, for sites of one element that vibrate differently; `FrozenPhonons.bFactor(sigma:)` and `FrozenPhonons.sigma(bFactor:)` convert to and from the B-factor, B = 8π²σ². Use `potentials(nx:ny:sliceThickness:)` instead for built potentials.) The average is of intensities, taken after the detector: each position's values are summed over configurations in potential order and divided by the number of potentials.
 
 ### Writing your own detector
 
