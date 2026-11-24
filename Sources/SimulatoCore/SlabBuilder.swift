@@ -148,8 +148,13 @@ public enum SlabBuilder {
                                       maximumStrain: Double = defaultMaximumStrain) throws -> OrthogonalUnit {
         guard maximumStrain.isFinite, maximumStrain >= 0 else { throw SimulatoError.invalidStrain(maximumStrain) }
         try checkOccupancy(cell)
-        let rotation = try zoneRotation(cell, zoneAxis: zoneAxis)
-        // The strain of a rung comes from V and the box alone, so atoms are cut only for the rung that is taken (#130).
+        return try ladder(cell, rotation: try zoneRotation(cell, zoneAxis: zoneAxis), maximumStrain: maximumStrain)
+    }
+
+    /// The unit with the fewest repetitions of ``repetitionLadder`` whose strain is at most `maximumStrain`. The strain of a rung
+    /// comes from V and the box alone, so atoms are cut only for the rung that is taken (#130).
+    /// - Throws: `SimulatoError.strainTooLarge` with the least strain found and its repetitions; `CancellationError` before a rung.
+    static func ladder(_ cell: CrystalCell, rotation: [SIMD3<Double>], maximumStrain: Double) throws -> OrthogonalUnit {
         var best: UnitPlan?
         for n in repetitionLadder {
             try Task.checkCancellation()

@@ -40,6 +40,7 @@ Read <doc:GridsWavesConventions> before indexing into any array the library retu
 - ``CrystalCell``
 - ``CrystalCell/Site``
 - ``SlabBuilder``
+- ``SlabBuilder/BeamAxis``
 - ``OrthogonalUnit``
 - ``Slab``
 
