@@ -7,7 +7,7 @@ PYTHON=${PYTHON:-.venv/bin/python}
 
 # Generators that write fixture files (tools/README.md lists what each writes). stem-detectors, ctf and thermal-sites import
 # potential-multislice, which therefore runs first; hrtem-series imports both potential-multislice and ctf.
-writers=(potential-multislice stem-detectors ctf ctf-profiles hrtem-series sampling-tilt scan-patterns waves icom linescan slab beam-intensities kirkland thermal-sites)
+writers=(potential-multislice stem-detectors ctf ctf-profiles hrtem-series sampling-tilt scan-patterns waves icom linescan slab beam-intensities kirkland thermal-sites flexible-annular)
 # Generators that print the numbers a test holds inline. They run so a broken reference shows here; their output goes to
 # the log and is not compared (the numbers live in the Swift test files).
 printers=(potential-project-tile polar crystal-slices image-interpolate azimuthal linescan-defaults simulation-plan)
