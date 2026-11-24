@@ -135,10 +135,7 @@ public enum Multislice {
                 t.imaginary[i] = sin(phase)
             }
             fft.forward(&t)
-            for i in aperture.indices {
-                t.real[i] *= aperture[i]
-                t.imaginary[i] *= aperture[i]
-            }
+            t.multiply(byReal: aperture)
             fft.inverse(&t)
             return t
         }
@@ -186,13 +183,13 @@ public enum Multislice {
         let wanted = Set(planes)
         for (j, slice) in potential.slices.enumerated() {
             let t = transmissions[j]
-            multiply(&psi, by: t)
+            psi.multiply(by: t)
             fft.forward(&psi)
             if propagators[slice.thickness] == nil {
                 propagators[slice.thickness] = propagator(grid: grid, beam: incident.beam, thickness: slice.thickness,
                                                           tilt: incident.tilt)
             }
-            multiply(&psi, by: propagators[slice.thickness]!)
+            psi.multiply(by: propagators[slice.thickness]!)
             fft.inverse(&psi)
             if wanted.contains(j) {
                 out.append(Waves.unchecked(field: psi, grid: grid, beam: incident.beam, normalization: incident.normalization,
@@ -201,14 +198,5 @@ public enum Multislice {
             try afterSlice(j)
         }
         return out
-    }
-
-    /// ψ ← ψ · t, (a + ib)(c + id) = (ac − bd) + i(ad + bc).
-    static func multiply(_ psi: inout ComplexField, by t: ComplexField) {
-        for i in psi.real.indices {
-            let a = psi.real[i], b = psi.imaginary[i], c = t.real[i], d = t.imaginary[i]
-            psi.real[i] = a * c - b * d
-            psi.imaginary[i] = a * d + b * c
-        }
     }
 }
