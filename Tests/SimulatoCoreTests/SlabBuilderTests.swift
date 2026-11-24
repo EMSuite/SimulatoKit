@@ -138,4 +138,25 @@ struct SlabBuilderTests {
             }
         }
     }
+
+    /// The ladder cuts atoms only for the rung it takes (#130): its unit is the one cut at that rung directly, atom for atom.
+    @Test func theLadderTakesTheRungItCuts() throws {
+        for zone in [SIMD3(1, 1, 1), SIMD3(1, 2, 3), SIMD3(2, 1, 0)] {
+            let taken = try SlabBuilder.orthogonalUnit(of: aluminium(), zoneAxis: zone)
+            let direct = try SlabBuilder.orthogonalUnit(of: aluminium(), zoneAxis: zone, maximumRepetitions: taken.maximumRepetitions)
+            #expect(taken.structure.box == direct.structure.box, "Al \(zone)")
+            #expect(taken.structure.atoms.map(\.position) == direct.structure.atoms.map(\.position), "Al \(zone)")
+            #expect(taken.supercell == direct.supercell && taken.strain == direct.strain, "Al \(zone)")
+        }
+    }
+
+    /// Stop reaches the ladder (#130): a cancelled task is answered with `CancellationError` before any rung is cut.
+    @Test func aCancelledLadderStops() async throws {
+        let al = try aluminium()
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try SlabBuilder.orthogonalUnit(of: al, zoneAxis: SIMD3(1, 2, 3))
+        }
+        await #expect(throws: CancellationError.self) { try await task.value }
+    }
 }
