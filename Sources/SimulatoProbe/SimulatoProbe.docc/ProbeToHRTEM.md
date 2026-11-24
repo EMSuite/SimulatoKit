@@ -94,6 +94,8 @@ For a given Cs and beam energy:
 
 - ``ContrastTransferFunction/scherzerDefocus(Cs:energy:factor:)``: sign(Cs) √(factor |Cs| λ) in Å, factor 1.5 by default (abTEM's; 4/3 is the other convention in use) (assign it to `Aberrations.defocus`).
 - ``ContrastTransferFunction/pointResolution(Cs:energy:divisor:)``: (λ³ |Cs| / divisor)^¼ in Å, divisor 6 by default (abTEM's).
+- ``ContrastTransferFunction/scherzerDefocus(energy:)``, ``ContrastTransferFunction/pointResolution(energy:)`` and ``ContrastTransferFunction/crossoverAngle(energy:)``: the same from the function's own Cs; the crossover angle is 10³ λ / point resolution in mrad, the first zero of the phase at Scherzer defocus.
+- ``ContrastTransferFunction/profiles(energy:points:maxAngle:phi:)``: radial profiles of the transfer function and each factor (``TransferFunctionProfiles``), for a transfer function plot with its envelopes.
 - ``ContrastTransferFunction/nyquistSampling(semiangleCutoff:energy:oversampling:)``: the pixel size in Å that samples a semiangle given in mrad at the Nyquist rate.
 
 The envelope functions are available on their own as ``ContrastTransferFunction/temporalEnvelope(alpha:wavelength:focalSpread:)`` and ``ContrastTransferFunction/spatialEnvelope(alpha:phi:wavelength:aberrations:angularSpread:)``, and ``ContrastTransferFunction/kernel(on:wavelength:)`` returns H on a grid in FFT order.
