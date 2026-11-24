@@ -3,7 +3,7 @@
 Every committed fixture of the kit lives in this folder and is read by `SimulatoKitParityTests` (the target excludes the
 folder from its sources; the tests open the files by path). Each `*-pins.json` holds the scalars, shapes, versions and the
 index into its `*-arrays.bin` sidecar (float64 little-endian, complex as interleaved re, im), whose sha256 the JSON records.
-20 files, 20.5 MB.
+26 files, 22.0 MB.
 
 Every file is regenerated in place by the generator named in its row, from the repo root with the environment in
 `tools/README.md`: `.venv/bin/python -I -B tools/pins/<subject>/pins.py`. A regeneration that changes an `*-arrays.bin`
@@ -38,5 +38,7 @@ GPL-3.0-only licence. No fixture is measured data, and the text fixtures carry n
 | `beam-intensities-pins.json` | 90.1 KB | `tools/pins/beam-intensities/pins.py` | beam intensities by hkl at five thicknesses: Si [110], Si [111], Mg [0001]; the thin Si [110] 002 series |
 | `kirkland-pins.json` | 127.5 KB | `tools/pins/kirkland/pins.py` | the Kirkland parameterisation: f(k²) for Z = 1 to 103, single atoms, the Si [110] slab's exit wave |
 | `kirkland-arrays.bin` | 183.8 KB | `tools/pins/kirkland/pins.py` | (the generator also writes `Sources/SimulatoMultislice/KirklandTable.swift`) |
+| `thermal-sites-pins.json` | 19.7 KB | `tools/pins/thermal-sites/pins.py` | frozen phonons with σ per element and per site (Si, SrTiO₃), σ ↔ B |
+| `thermal-sites-arrays.bin` | 1.0 MB | `tools/pins/thermal-sites/pins.py` | |
 
 The file names keep the development slice they were written in (`slice-N`); the tests open them by these names.
