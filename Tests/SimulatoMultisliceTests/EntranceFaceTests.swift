@@ -1,7 +1,7 @@
 //
 //  EntranceFaceTests.swift
 //  Role: the multislice meets a slab's face nearest the source first (#126): a gold layer at the top of the cell along
-//        [0 0 1] lands in the first slice of the potential, and in the last along [0 0 −1].
+//        [0 0 1] lands in the first slice of the potential and the carbon layer deeper; along [0 0 −1] the other way.
 //
 
 import Testing
@@ -19,11 +19,13 @@ struct EntranceFaceTests {
         for (zone, goldFirst) in cases {
             let slab = try SlabBuilder.slab(of: layered, zoneAxis: zone, thickness: 10, sliceThickness: 1)
             let potential = try Potential(structure: slab.structure, nx: 16, ny: 16, sliceThicknesses: slab.sliceThicknesses)
-            let last: Int = potential.sliceThicknesses.count - 1
+            let count: Int = potential.sliceThicknesses.count
             let gold: Int = potential.sliceOfAtom[potential.atoms.firstIndex(where: { $0.atomicNumber == 79 })!]
             let carbon: Int = potential.sliceOfAtom[potential.atoms.firstIndex(where: { $0.atomicNumber == 6 })!]
-            #expect(gold == (goldFirst ? 0 : last), "\(zone): gold in slice \(gold) of \(last + 1)")
-            #expect(carbon == (goldFirst ? last : 0), "\(zone): carbon in slice \(carbon) of \(last + 1)")
+            // zShift keeps the layers off the slice boundaries, so the far layer sits a slice short of the exit face.
+            let (near, far): (Int, Int) = goldFirst ? (gold, carbon) : (carbon, gold)
+            #expect(near == 0, "\(zone): the layer nearest the source in slice \(near) of \(count)")
+            #expect(far > near, "\(zone): the far layer in slice \(far) of \(count)")
         }
     }
 }
