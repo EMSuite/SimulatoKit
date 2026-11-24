@@ -18,6 +18,26 @@ import Synchronization
 import SimulatoCore
 
 /// What the Metal path computes per slice: from atoms (a `Potential`) or from a built V (a `ProjectedPotential`).
+/// The sizes the Metal path can address, checked before any buffer is made.
+package enum MetalLimits {
+    /// The bytes of a tensor of `shape` with `elementBytes` per element; nil when the product overflows an `Int`.
+    package static func tensorBytes(_ shape: [Int], elementBytes: Int) -> Int? {
+        var bytes = elementBytes
+        for n in shape {
+            guard n >= 0 else { return nil }
+            let (r, overflow) = bytes.multipliedReportingOverflow(by: n)
+            if overflow { return nil }
+            bytes = r
+        }
+        return bytes
+    }
+
+    /// Whether the GPU potential's scatter indices, up to `elements` × `points`, fit an `Int32`.
+    package static func scatterIndexFits(elements: Int, points: Int) -> Bool {
+        elements >= 0 && points >= 0 && (points == 0 || elements <= Int(Int32.max) / points)
+    }
+}
+
 enum MetalSliceSource: Hashable {
     case atoms(elements: Int, contributions: Int)
     case values
@@ -112,7 +132,10 @@ final class MetalEngine: @unchecked Sendable {
 
     /// A shared-storage tensor of `count` 32-bit or 64-bit elements, zeroed.
     func tensor(_ shape: [Int], _ type: MPSDataType) throws -> (MPSGraphTensorData, any MTLBuffer) {
-        let bytes = shape.reduce(1, *) * (type == .complexFloat32 ? 8 : 4)
+        guard let bytes = MetalLimits.tensorBytes(shape, elementBytes: type == .complexFloat32 ? 8 : 4),
+              bytes <= device.maxBufferLength else {
+            throw SimulatoError.metalUnavailable("a tensor of shape \(shape) is larger than the device's largest buffer (\(device.maxBufferLength) bytes); use .cpu or a smaller batch")
+        }
         guard let buffer = device.makeBuffer(length: max(bytes, 4), options: .storageModeShared) else {
             throw SimulatoError.metalFailure("the device made no buffer of \(bytes) bytes")
         }
@@ -288,6 +311,10 @@ extension MetalMultislice {
         let grid = potential.grid
         let elements = Set(potential.atoms.map(\.atomicNumber)).sorted()
         let e = max(elements.count, 1)
+        // The scatter indices are 32-bit: elements × grid points must fit an Int32.
+        guard MetalLimits.scatterIndexFits(elements: e, points: grid.count) else {
+            throw SimulatoError.metalUnavailable("\(e) elements on \(grid.count) grid points exceed the GPU potential's 32-bit index; use .cpu")
+        }
         let lists = contributions(potential, elements: elements)
         // Padded to a power of two (at least 16) so potentials of similar size share one executable; padding adds 0 at 0.
         var m = 16

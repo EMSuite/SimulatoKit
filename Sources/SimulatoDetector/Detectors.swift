@@ -232,7 +232,10 @@ public struct SegmentedDetector: Detector, Hashable {
     public func detect(_ p: DiffractionIntensity) throws -> [Double] {
         let a = p.angularSampling
         func m(_ n: Int, _ d: Double) -> Int {
-            var k = Int(2 * (outer / d).rounded(.up)) + 1
+            // In Double first: a fine angular sampling makes 2 ⌈outer / d⌉ + 1 larger than any grid (or than an Int).
+            let kd = 2 * (outer / d).rounded(.up) + 1
+            guard kd < Double(n) else { return n }
+            var k = Int(kd)
             if k % 2 != n % 2 { k += 1 }
             return min(k, n)
         }

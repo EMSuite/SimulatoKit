@@ -130,8 +130,12 @@ public struct FrozenPhonons: Sendable, Hashable {
     }
 
     /// Configuration c: every atom at its position plus its displacement (not wrapped; the potential wraps it).
+    /// - Throws: `invalidFrozenPhonons` for c outside 0 ..< the configurations.
     public func configuration(_ c: Int) throws -> AtomicStructure {
-        try AtomicStructure(box: structure.box, atoms: zip(structure.atoms, displacements[c]).map {
+        guard displacements.indices.contains(c) else {
+            throw SimulatoError.invalidFrozenPhonons("configuration \(c) is outside 0 ..< \(displacements.count)")
+        }
+        return try AtomicStructure(box: structure.box, atoms: zip(structure.atoms, displacements[c]).map {
             AtomicStructure.Atom(atomicNumber: $0.0.atomicNumber, position: $0.0.position + $0.1)
         })
     }

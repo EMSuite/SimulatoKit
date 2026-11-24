@@ -15,7 +15,8 @@ extension ScanMeasurement {
     /// `samplingY` [Å] (the scan's extent over its points). The kernel is scipy's: radius ⌊4 σ / d + ½⌋ pixels,
     /// normalised, periodic. The intensity is mixed across scan positions, so integrating the patterns before or after
     /// gives the same image.
-    /// - Throws: `invalidScan` for a negative or non-finite σ or sampling.
+    /// - Throws: `invalidScan` for a negative or non-finite σ or sampling, a line scan, or a kernel radius above
+    ///   2^23 scan pixels.
     public func gaussianSourceSize(sigmaX: Double, sigmaY: Double, samplingX: Double, samplingY: Double) throws -> ScanMeasurement {
         guard sigmaX.isFinite, sigmaY.isFinite, sigmaX >= 0, sigmaY >= 0 else {
             throw SimulatoError.invalidScan("the source size must be finite and non-negative, got (\(sigmaX), \(sigmaY)) Å")
@@ -24,6 +25,9 @@ extension ScanMeasurement {
             throw SimulatoError.invalidScan("the scan sampling must be finite and positive, got (\(samplingX), \(samplingY)) Å")
         }
         guard scanShape.count == 2 else { throw SimulatoError.invalidScan("the source size filters a two-axis scan; a line scan has one axis") }
+        for (s, d) in [(sigmaX, samplingX), (sigmaY, samplingY)] where 4 * s / d + 0.5 > Double(Self.maximumKernelRadius) {
+            throw SimulatoError.invalidScan("a source size of \(s) Å at \(d) Å per scan pixel needs a kernel radius above \(Self.maximumKernelRadius) pixels")
+        }
         let nx = scanShape[0], ny = scanShape[1], v = valueCount
         var data = values
         // Along y (the second scan axis) then x, each with its own kernel; scipy filters the axes in order.
@@ -38,6 +42,9 @@ extension ScanMeasurement {
     public func gaussianSourceSize(sigma: Double, samplingX: Double, samplingY: Double) throws -> ScanMeasurement {
         try gaussianSourceSize(sigmaX: sigma, sigmaY: sigma, samplingX: samplingX, samplingY: samplingY)
     }
+
+    /// The largest kernel radius [scan pixels] of the source size (a kernel of 2^24 + 1 weights, 128 MB).
+    static let maximumKernelRadius = 1 << 23
 
     /// scipy's `gaussian_filter1d` weights: exp(−x²/2σ²) for |x| ≤ ⌊4σ + ½⌋, summing to 1.
     static func gaussianKernel(sigmaInPixels s: Double) -> [Double] {
@@ -74,14 +81,33 @@ extension ScanMeasurement {
     /// Poisson noise for a total `dose` [electrons per pattern] (abTEM `poisson_noise(total_dose=)`): every value times the
     /// dose, clipped at 0, then drawn from a Poisson distribution with that mean. The generator is the kit's own (a seed
     /// gives the same noise on every run, not the bits of NumPy's).
-    /// - Throws: `invalidScan` for a negative or non-finite dose.
+    /// - Throws: `invalidScan` for a negative or non-finite dose, a non-finite value, or a value whose mean exceeds
+    ///   1e18.
     public func poissonNoise(dose: Double, seed: UInt64) throws -> ScanMeasurement {
         guard dose.isFinite, dose >= 0 else {
             throw SimulatoError.invalidScan("the dose must be finite and non-negative, got \(dose)")
         }
+        let means = try poissonMeans(dose: dose)
         var rng = GaussianGenerator(seed: seed)
         return ScanMeasurement(scanShape: scanShape, valueShape: valueShape,
-                               values: values.map { Double(PoissonSampler.draw(mean: max($0 * dose, 0), &rng)) })
+                               values: means.map { Double(PoissonSampler.draw(mean: $0, &rng)) })
+    }
+
+    /// Every value times the dose, clipped at 0: the Poisson means, each at most `PoissonSampler.maximumMean` (a NaN or
+    /// infinite value, or a mean beyond an `Int`, has no draw; the draw loop would never end).
+    func poissonMeans(dose: Double) throws -> [Double] {
+        var means = [Double](repeating: 0, count: values.count)
+        for (i, v) in values.enumerated() {
+            guard v.isFinite else {
+                throw SimulatoError.invalidScan("value \(i) is \(v): Poisson noise needs finite values")
+            }
+            let m = v * dose
+            guard m <= PoissonSampler.maximumMean else {
+                throw SimulatoError.invalidScan("value \(i) times the dose is \(m), above the largest Poisson mean \(PoissonSampler.maximumMean)")
+            }
+            means[i] = max(m, 0)
+        }
+        return means
     }
 
     /// Poisson noise for a dose per scan area [electrons per Å²] (abTEM `poisson_noise(dose_per_area=)`): the dose per
@@ -97,7 +123,8 @@ extension ScanMeasurement {
     /// `poisson_noise(total_dose=, samples=)`, whose sample axis is the array's index here): each sample is the scan
     /// times the dose, clipped at 0, drawn as `poissonNoise(dose:seed:)`. The samples continue one generator stream, so
     /// sample 0 is the single draw of the same seed.
-    /// - Throws: `invalidScan` for fewer than one sample or a negative or non-finite dose.
+    /// - Throws: `invalidScan` for fewer than one sample, a negative or non-finite dose, a non-finite value, or a value
+    ///   whose mean exceeds 1e18.
     public func poissonNoise(dose: Double, samples: Int, seed: UInt64) throws -> [ScanMeasurement] {
         guard samples >= 1 else { throw SimulatoError.invalidScan("samples must be at least 1, got \(samples)") }
         // Refuse before any work when the samples would not fit in half of the physical memory (8 bytes a value).
@@ -109,8 +136,8 @@ extension ScanMeasurement {
         guard dose.isFinite, dose >= 0 else {
             throw SimulatoError.invalidScan("the dose must be finite and non-negative, got \(dose)")
         }
+        let means = try poissonMeans(dose: dose)
         var rng = GaussianGenerator(seed: seed)
-        let means = values.map { max($0 * dose, 0) }
         return (0..<samples).map { _ in
             ScanMeasurement(scanShape: scanShape, valueShape: valueShape,
                             values: means.map { Double(PoissonSampler.draw(mean: $0, &rng)) })
@@ -129,6 +156,9 @@ extension ScanMeasurement {
 
 /// Poisson draws: Knuth's product method below a mean of 10, Hörmann's PTRS (transformed rejection with squeeze) above.
 enum PoissonSampler {
+    /// The largest mean drawn (the draw is an `Int`; PTRS's candidates reach a few standard deviations above the mean).
+    static let maximumMean = 1e18
+
     static func uniform(_ rng: inout GaussianGenerator) -> Double {
         Double(rng.nextUInt64() >> 11) * (1.0 / 9007199254740992.0)
     }

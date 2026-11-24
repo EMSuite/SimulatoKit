@@ -82,7 +82,9 @@ public enum STEM {
                            _ sums: inout [[Double]]) throws {
         for (d, detector) in detectors.enumerated() {
             let v = try detector.detect(intensity)
-            precondition(v.count == counts[d], "a detector returned the wrong number of values")
+            guard v.count == counts[d] else {
+                throw SimulatoError.invalidDetector("detector \(d) returned \(v.count) values; its shape(for:beam:) says \(counts[d])")
+            }
             for k in 0..<v.count { sums[d][q * counts[d] + k] += v[k] }
         }
     }

@@ -1,8 +1,8 @@
 //
 //  BatchRefusalTests.swift
-//  Role: review findings of #56 (issue #60): a batch of waves of different energies is refused on both backends (it
+//  Role: review findings of #56 (issues #60, #59): a batch of waves of different energies is refused on both backends (it
 //        shared the first wave's transmission and propagator), and `MetalAccuracy` says which runs lie inside the range
-//        its bounds were tested on.
+//        its bounds were tested on; the Metal path's size checks (a tensor's bytes, the 32-bit scatter index).
 //
 
 import Testing
@@ -36,5 +36,25 @@ struct BatchRefusalTests {
         #expect(!a.covers(nx: 2048, ny: 512, slices: 50) && !a.covers(nx: 512, ny: 1025, slices: 50))
         #expect(!a.covers(nx: 512, ny: 512, slices: 101))
         #expect(MetalAccuracy(sliceLimit: 500, gridLimit: 2048).covers(nx: 2048, ny: 2048, slices: 500))
+    }
+}
+
+/// #59: the Metal path checks its sizes before making a buffer (a 32-bit scatter index trapped above 2^31; a buffer size
+/// was never compared with the device's largest).
+@Suite("Metal limits")
+struct MetalLimitsTests {
+    @Test func tensorBytesReportOverflow() {
+        #expect(MetalLimits.tensorBytes([2, 3, 4], elementBytes: 8) == 192)
+        #expect(MetalLimits.tensorBytes([], elementBytes: 4) == 4)
+        #expect(MetalLimits.tensorBytes([1 << 32, 1 << 32], elementBytes: 8) == nil)
+        #expect(MetalLimits.tensorBytes([1 << 31, 1 << 31], elementBytes: 8) == nil)
+        #expect(MetalLimits.tensorBytes([-1, 4], elementBytes: 4) == nil)
+    }
+
+    @Test func scatterIndexFitsAnInt32() {
+        #expect(MetalLimits.scatterIndexFits(elements: 3, points: 1024 * 1024))
+        #expect(MetalLimits.scatterIndexFits(elements: 1, points: Int(Int32.max)))
+        #expect(!MetalLimits.scatterIndexFits(elements: 2, points: Int(Int32.max)))
+        #expect(!MetalLimits.scatterIndexFits(elements: 3000, points: 1 << 20))
     }
 }
