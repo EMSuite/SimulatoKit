@@ -2,7 +2,7 @@
 //  SimulationPlan.swift
 //  Role: what a run will need before it runs (#91): the sampling from the largest angle the result needs, the grid
 //        (abTEM's for that sampling, rounded up to FFT-friendly lengths), the slices, the propagation steps and FFTs,
-//        the GPU memory by the design's budget table, and a time from a rate the caller measured. A plan over the
+//        the GPU memory a cold run peaks at (calibrated on the reference Mac, #92), and a time from a rate the caller measured. A plan over the
 //        memory budget, over the device's largest buffer or over 4096² is refused with the sampling that would fit.
 //
 
@@ -75,6 +75,14 @@ public struct SimulationPlan: Sendable, Equatable {
         case probes(positions: Int)
     }
 
+    /// Where the GPU's potential comes from.
+    public enum PotentialSource: Sendable, Hashable {
+        /// Built on the GPU from the atoms (`Multislice` with a `Potential` on `.metal`).
+        case atoms
+        /// Built slices uploaded (a `ProjectedPotential`).
+        case slices
+    }
+
     /// What to plan.
     public struct Request: Sendable, Hashable {
         /// The box's lateral size (x, y) [Å].
@@ -91,8 +99,10 @@ public struct SimulationPlan: Sendable, Equatable {
         public var largestAngle: Double
         /// A sampling [Å] to use instead of the rule.
         public var sampling: Double?
-        /// The number of elements in the specimen (one scattering kernel each).
+        /// The number of elements in the specimen (one scattering kernel each when built from the atoms).
         public var elements: Int
+        /// Where the potential comes from.
+        public var potential: PotentialSource
         public var illumination: Illumination
         /// Frozen-phonon configurations (1 for a static lattice).
         public var configurations: Int
@@ -102,7 +112,7 @@ public struct SimulationPlan: Sendable, Equatable {
         public var batchBytes: Int
 
         public init(extent: SIMD2<Double>, thickness: Double, sliceThickness: Double = 1, energy: Double,
-                    largestAngle: Double, sampling: Double? = nil, elements: Int = 1, illumination: Illumination = .planeWave,
+                    largestAngle: Double, sampling: Double? = nil, elements: Int = 1, potential: PotentialSource = .atoms, illumination: Illumination = .planeWave,
                     configurations: Int = 1, storedExitPlanes: Int = 1,
                     batchBytes: Int = ExecutionOptions.standard.metalBatchBytes) {
             self.extent = extent
@@ -112,6 +122,7 @@ public struct SimulationPlan: Sendable, Equatable {
             self.largestAngle = largestAngle
             self.sampling = sampling
             self.elements = elements
+            self.potential = potential
             self.illumination = illumination
             self.configurations = configurations
             self.storedExitPlanes = storedExitPlanes
@@ -119,21 +130,27 @@ public struct SimulationPlan: Sendable, Equatable {
         }
     }
 
-    /// GPU memory by item [bytes], N grid points (the design's budget table).
+    /// GPU memory by item [bytes], N grid points, b waves in a batch: the peak of a cold run (the first of its shape,
+    /// compiling its executables), fitted to the reference Mac's measured peaks within 25 % (#92: HRTEM, CBED and STEM at
+    /// 256² to 1024²). A warm run reuses buffers and peaks at about 0.6 to 0.7 of it.
     public struct Memory: Sendable, Hashable {
-        /// The working set of one batch of waves: 24 N per wave.
+        /// The waves: 40 N per wave in a batch (two complex64 buffers, 16 N, and the FFTs' workspace, about 24 N).
         public let waves: Int
-        /// One scattering kernel per element: 4 N each.
-        public let kernels: Int
-        /// One propagator per distinct slice thickness: 8 N each.
+        /// The potential. From the atoms: 4 N per element for the kernels and about 48 N per element to build each
+        /// slice. From built slices: 4 N per slice uploaded and about 16 N to make each transmission.
+        public let potential: Int
+        /// One complex64 propagator per distinct slice thickness, 8 N each, and the float32 antialias aperture, 4 N.
         public let propagators: Int
-        /// The exit waves kept: 8 N for each stored plane of each wave in a batch.
+        /// A probe run's centred spectrum, 8 N, and the diffraction intensities, 4 N per wave in a batch; 0 for a plane
+        /// wave.
+        public let scan: Int
+        /// The exit waves kept besides the last: 8 N for each further stored plane of each wave in a batch.
         public let storedExitWaves: Int
 
         /// The sum: the predicted peak.
         public var total: Int {
             var sum = 0
-            for v in [waves, kernels, propagators, storedExitWaves] {
+            for v in [waves, potential, propagators, scan, storedExitWaves] {
                 let (t, o) = sum.addingReportingOverflow(v)
                 if o { return .max }
                 sum = t
@@ -159,7 +176,8 @@ public struct SimulationPlan: Sendable, Equatable {
     /// FFTs: two per slice step.
     public let fftCount: Int
     public let memory: Memory
-    /// The largest single buffer: one batch of complex float32 waves, 8 N per wave [bytes].
+    /// The largest single buffer: one batch of complex float32 waves, 8 N per wave, or the element kernels, 4 N each
+    /// [bytes].
     public let largestBufferBytes: Int
 
     /// The number of slices.
@@ -238,14 +256,25 @@ public struct SimulationPlan: Sendable, Equatable {
             }
             return p
         }
-        let memory = Memory(waves: product(24, n, batch), kernels: product(4, n, r.elements),
-                            propagators: product(8, n, Set(thicknesses).count),
-                            storedExitWaves: product(8, n, r.storedExitPlanes, min(waveCount, batch)))
+        let potentialBytes: Int
+        switch r.potential {
+        case .atoms: potentialBytes = product(52, n, r.elements)
+        case .slices: potentialBytes = product(4, n, thicknesses.count + 4)
+        }
+        let scanBytes: Int
+        switch r.illumination {
+        case .planeWave: scanBytes = 0
+        case .probes: scanBytes = product(4, n, batch + 2)
+        }
+        let memory = Memory(waves: product(40, n, batch), potential: potentialBytes,
+                            propagators: product(4, n, 2 * Set(thicknesses).count + 1), scan: scanBytes,
+                            storedExitWaves: product(8, n, r.storedExitPlanes - 1, batch))
         let steps = product(thicknesses.count, waveCount, r.configurations)
         return SimulationPlan(request: r, grid: grid, requestedSampling: sampling,
                               cutoffAngles: Antialias.cutoffAngles(on: grid, wavelength: beam.wavelength),
                               sliceThicknesses: thicknesses, batchSize: batch, propagationSteps: steps,
-                              fftCount: product(2, steps), memory: memory, largestBufferBytes: product(8, n, batch))
+                              fftCount: product(2, steps), memory: memory,
+                              largestBufferBytes: max(product(8, n, batch), r.potential == .atoms ? product(4, n, r.elements) : 0))
     }
 
     /// The longest grid axis a plan builds (longer is refused before any limit is applied).
