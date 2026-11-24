@@ -76,7 +76,7 @@ extension Multislice {
         guard let first = incidents.first else { return [] }
         for w in incidents where !w.grid.matches(potential.grid) { throw SimulatoError.gridMismatch }
         try checkSharedEnergy(incidents)
-        var reporter = ProgressReporter(progress, interval: options.progressInterval)
+        var reporter = SimulationProgressReporter(progress, interval: options.progressInterval)
         reporter.report(batchPreparing(incidents.count))
         try Task.checkCancellation()
         let tilt = backend == .metal ? try sharedTilt(incidents) : first.tilt
@@ -91,7 +91,7 @@ extension Multislice {
         guard let first = incidents.first else { return [] }
         for w in incidents where !w.grid.matches(potential.grid) { throw SimulatoError.gridMismatch }
         try checkSharedEnergy(incidents)
-        var reporter = ProgressReporter(progress, interval: options.progressInterval)
+        var reporter = SimulationProgressReporter(progress, interval: options.progressInterval)
         reporter.report(batchPreparing(incidents.count))
         try Task.checkCancellation()
         let tilt = backend == .metal ? try sharedTilt(incidents) : first.tilt
@@ -146,13 +146,13 @@ extension Multislice {
         if case .metal = prepared.storage, try sharedTilt(incidents) != prepared.tilt {
             throw SimulatoError.invalidTilt("the waves of a .metal batch must have the tilt its potential was prepared for")
         }
-        var reporter = ProgressReporter(progress, interval: options.progressInterval)
+        var reporter = SimulationProgressReporter(progress, interval: options.progressInterval)
         try Task.checkCancellation()
         return try runPrepared(incidents, prepared, options, &reporter)
     }
 
     static func runPrepared(_ incidents: [Waves], _ prepared: PreparedBatch, _ options: ExecutionOptions,
-                            _ reporter: inout ProgressReporter) throws -> [Waves] {
+                            _ reporter: inout SimulationProgressReporter) throws -> [Waves] {
         switch prepared.storage {
         case .cpu(let potential, let transmissions, let workspace):
             return try cpuBatch(incidents, potential, transmissions, workspace, options, &reporter)
@@ -167,7 +167,7 @@ extension Multislice {
 
     static func cpuBatch(_ incidents: [Waves], _ potential: ProjectedPotential, _ transmissions: [ComplexField],
                          _ workspace: CPUWorkspace, _ options: ExecutionOptions,
-                         _ reporter: inout ProgressReporter) throws -> [Waves] {
+                         _ reporter: inout SimulationProgressReporter) throws -> [Waves] {
         let count = incidents.count
         var out: [Waves] = []
         out.reserveCapacity(count)
@@ -199,7 +199,7 @@ extension Multislice {
     }
 
     static func metalBatch(_ incidents: [Waves], _ prepared: MetalPreparedPotential, _ options: ExecutionOptions,
-                           _ reporter: inout ProgressReporter) throws -> [Waves] {
+                           _ reporter: inout SimulationProgressReporter) throws -> [Waves] {
         let count = incidents.count, slices = max(1, prepared.sliceCount)
         let fields = try MetalMultislice.runBatch(incidents.map(\.field), prepared: prepared,
                                                   options: options) { start, done, used in
