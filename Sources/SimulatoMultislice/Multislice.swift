@@ -120,14 +120,16 @@ public enum Multislice {
         }
     }
 
-    /// The bandlimited transmission function of each slice, in float64 (both backends start from these).
+    /// The bandlimited transmission function of each slice, in float64 (both backends start from these). Cancellation
+    /// is checked before each slice (`CancellationError`).
     public static func transmissionFunctions(_ potential: ProjectedPotential, beam: ElectronBeam) throws -> [ComplexField] {
         WorkCounter.current?.countPreparation()
         let grid = potential.grid
         let fft = try FFT2D(nx: grid.nx, ny: grid.ny)
         let aperture = Antialias.aperture(on: grid)
         let sigma = beam.interactionParameter
-        return potential.slices.map { slice in
+        return try potential.slices.map { slice in
+            try Task.checkCancellation()
             var t = ComplexField(nx: grid.nx, ny: grid.ny)
             for i in slice.values.indices {
                 let phase = sigma * slice.values[i]

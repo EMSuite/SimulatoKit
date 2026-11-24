@@ -25,12 +25,14 @@ extension Multislice {
     /// with its own FFT plan; every exit wave is computed exactly as one sequential run computes it (bit for bit).
     public static let maximumCPUThreads = ExecutionOptions.standard.maximumCPUThreads
 
-    /// The exit waves of `incidents` on at most `threads` threads, in rounds of one wave per thread: before each round,
-    /// on the calling thread, the task's cancellation is checked (`CancellationError`); after it, `round(first index,
-    /// exit waves)` gets the round's waves in order. Each wave is computed exactly as one sequential run computes it.
-    /// `workspace` holds the FFT plans and propagators the rounds reuse; pass one to reuse it across calls (chunks).
+    /// The exit waves of `incidents` on at most `threads` threads, in rounds of one wave per thread: the calling task's
+    /// cancellation is checked before each round and by every worker after each slice (`CancellationError`, #127); after
+    /// a round, `round(first index, exit waves)` gets the round's waves in order. Each wave is computed exactly as one
+    /// sequential run computes it. `workspace` holds the FFT plans and propagators the rounds reuse; pass one to reuse it
+    /// across calls (chunks). `afterSlice(j)` runs on the worker after slice j, before its cancellation check.
     package static func forEachCPURound(_ incidents: [Waves], potential: ProjectedPotential, transmissions: [ComplexField],
                                         last: Int, threads: Int, workspace: CPUWorkspace? = nil,
+                                        afterSlice: (Int) throws -> Void = { _ in },
                                         round: (Int, [Waves]) throws -> Void) throws {
         let count = incidents.count
         let workers = max(1, min(threads, ProcessInfo.processInfo.activeProcessorCount, count))
@@ -44,14 +46,22 @@ extension Multislice {
             let propagators = (0..<size).map { workspace.propagators(for: incidents[base + $0], thicknesses: thicknesses) }
             let results = Mutex<[Int: Waves]>([:])
             let failure = Mutex<(any Error)?>(nil)
-            DispatchQueue.concurrentPerform(iterations: size) { k in
-                do {
-                    // Plan k is this worker's alone during the round.
-                    let w = try runCPU(incidents[base + k], potential: potential, transmissions: transmissions,
-                                       planes: [last], fft: workspace.plan(k), propagators: propagators[k])[0]
-                    results.withLock { $0[k] = w }
-                } catch {
-                    failure.withLock { if $0 == nil { $0 = error } }
+            // The workers are GCD threads, where `Task.isCancelled` is always false: they read the calling task's state
+            // through its unsafe reference, whose `isCancelled` any thread may read while this closure runs.
+            withUnsafeCurrentTask { task in
+                DispatchQueue.concurrentPerform(iterations: size) { k in
+                    do {
+                        // Plan k is this worker's alone during the round.
+                        let w = try runCPU(incidents[base + k], potential: potential, transmissions: transmissions,
+                                           planes: [last], fft: workspace.plan(k), propagators: propagators[k],
+                                           afterSlice: { (j: Int) throws -> Void in
+                                               try afterSlice(j)
+                                               if task?.isCancelled == true { throw CancellationError() }
+                                           })[0]
+                        results.withLock { $0[k] = w }
+                    } catch {
+                        failure.withLock { if $0 == nil { $0 = error } }
+                    }
                 }
             }
             if let error = failure.withLock({ $0 }) { throw error }
@@ -68,7 +78,7 @@ extension Multislice {
     /// - Throws: `SimulatoError.gridMismatch` for a wave on another grid, `mixedEnergies` for waves of different energies,
     ///   `invalidTilt` for different tilts on `.metal`.
     ///
-    /// Cancellation is checked after every round of one wave per thread on `.cpu` and every chunk of slices on `.metal`
+    /// Cancellation is checked after every slice of every wave on `.cpu` and every chunk of slices on `.metal`
     /// (`CancellationError`); `progress` counts the waves done, at most once per `options.progressInterval`.
     public static func runBatch(_ incidents: [Waves], through potential: ProjectedPotential,
                                 backend: Backend = .cpu, options: ExecutionOptions = .standard,

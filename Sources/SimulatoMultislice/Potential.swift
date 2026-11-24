@@ -87,13 +87,15 @@ public struct Potential: Sendable, Hashable {
         return out
     }
 
-    /// The projected potential of every slice, on the CPU in float64.
+    /// The projected potential of every slice, on the CPU in float64. Cancellation is checked before each slice
+    /// (`CancellationError`).
     public func build() throws -> ProjectedPotential {
         let builder = try SliceBuilder(grid: grid, parameterization: parameterization)
         var slices: [PotentialSlice] = []
         slices.reserveCapacity(sliceThicknesses.count)
         // The atoms sorted into their slices once (filtering every atom for every slice was atoms x slices, #61).
         for (dz, sliceAtoms) in zip(sliceThicknesses, atomsBySlice()) {
+            try Task.checkCancellation()
             slices.append(PotentialSlice(thickness: dz, values: try builder.potential(of: sliceAtoms)))
         }
         return ProjectedPotential(grid: grid, slices: slices, sliceOfAtom: sliceOfAtom)

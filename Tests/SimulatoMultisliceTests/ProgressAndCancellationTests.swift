@@ -2,7 +2,8 @@
 //  ProgressAndCancellationTests.swift
 //  Role: a multislice run reports its progress and stops when its task is cancelled: a handler changes no number,
 //        no call arrives after a cancel, `CancellationError` comes within one slice (CPU) or chunk (Metal), the fraction
-//        is absent while the run prepares, and two Metal runs interleave between chunks.
+//        is absent while the run prepares, two Metal runs interleave between chunks, and a CPU round's workers, the
+//        potential build and the transmissions stop at the next slice (#127).
 //
 
 import Dispatch
@@ -84,6 +85,47 @@ struct ProgressAndCancellationTests {
         #expect(throws: CancellationError.self) { try earlyResult.get() }
     }
 
+    /// #127: a round's workers stop at the next slice, not at the end of their wave (they run on GCD threads, where
+    /// `Task.isCancelled` is false), and building the potential or the transmissions stops before the next slice.
+    @Test func aCancelStopsEveryCPUWorkerAtTheNextSlice() async throws {
+        let (lazy, wave) = try Self.crystal()
+        let built = try lazy.build()
+        let probe = try Probe(beam: wave.beam, grid: lazy.grid, aperture: Aperture(semiangleCutoff: 20))
+        let incidents = try (0..<2).map { try probe.build(at: SIMD2(0.3 * Double($0), 0.2 * Double($0))) }
+        let transmissions = try Multislice.transmissionFunctions(built, beam: wave.beam)
+        let seen = SliceLog()
+        let task = Task {
+            try withUnsafeCurrentTask { current in
+                try Multislice.forEachCPURound(incidents, potential: built, transmissions: transmissions,
+                                               last: built.slices.count - 1, threads: 2,
+                                               afterSlice: { (j: Int) in
+                                                   seen.deepest.withLock { $0 = max($0, j) }
+                                                   if j == 0 { current?.cancel() }
+                                               },
+                                               round: { (_: Int, _: [Waves]) in seen.rounds.withLock { $0 += 1 } })
+            }
+        }
+        let result = await task.result
+        #expect(throws: CancellationError.self) { try result.get() }
+        // Every worker cancels after its own slice 0, then checks.
+        let reached: Int = seen.deepest.withLock { $0 }
+        #expect(reached == 0, "the workers stopped after slice \(reached) of 20")
+        #expect(seen.rounds.withLock { $0 } == 0, "no round finished")
+        // Building stops before the next slice too.
+        let building = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try lazy.build()
+        }
+        let buildResult = await building.result
+        #expect(throws: CancellationError.self) { try buildResult.get() }
+        let transmitting = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try Multislice.transmissionFunctions(built, beam: wave.beam)
+        }
+        let transmissionResult = await transmitting.result
+        #expect(throws: CancellationError.self) { try transmissionResult.get() }
+    }
+
     @Test(.enabled(if: Multislice.metalIsAvailable, "no Metal device"))
     func metalWithAHandlerStaysInsideTheRegisteredTolerance() throws {
         let (lazy, wave) = try Self.crystal()
@@ -145,4 +187,10 @@ struct ProgressAndCancellationTests {
         #expect(started.all.count == 1)
         #expect(finished.all.count == 1, "the second run finished inside the first run's handler")
     }
+}
+
+/// The deepest slice the workers reached and the rounds finished (#127).
+private final class SliceLog: Sendable {
+    let deepest = Mutex(-1)
+    let rounds = Mutex(0)
 }
