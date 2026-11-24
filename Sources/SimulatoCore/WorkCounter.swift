@@ -18,6 +18,7 @@ package final class WorkCounter: Sendable {
     private let probeSpectra = Mutex(0)
     private let slicePotentials = Mutex(0)
     private let transmissions = Mutex(0)
+    private let deviceWaits = Mutex(0)
 
     package init() {}
 
@@ -31,10 +32,13 @@ package final class WorkCounter: Sendable {
     package var slicePotentialCount: Int { slicePotentials.withLock { $0 } }
     /// Transmission functions computed (CPU) or cached on the GPU, once per distinct slice (#122).
     package var transmissionCount: Int { transmissions.withLock { $0 } }
+    /// Waits for a Metal command buffer in a propagation (one per chunk of slices; #61).
+    package var deviceWaitCount: Int { deviceWaits.withLock { $0 } }
 
     package func countPreparation() { preparations.withLock { $0 += 1 } }
     package func countFFTPlan() { fftPlans.withLock { $0 += 1 } }
     package func countProbeSpectrum() { probeSpectra.withLock { $0 += 1 } }
     package func countSlicePotential() { slicePotentials.withLock { $0 += 1 } }
     package func countTransmission() { transmissions.withLock { $0 += 1 } }
+    package func countDeviceWait() { deviceWaits.withLock { $0 += 1 } }
 }

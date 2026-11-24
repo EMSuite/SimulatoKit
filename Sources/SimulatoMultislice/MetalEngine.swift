@@ -10,6 +10,7 @@
 //        ramps) is computed on the host in float64 by the CPU path's code and cast once.
 //
 
+import Accelerate
 import Foundation
 import Metal
 import MetalPerformanceShaders
@@ -551,18 +552,33 @@ extension MetalMultislice {
     /// where `read` gets the wave, and after about 50 to 150 ms of work. The run lock is held for a chunk only. Before
     /// each chunk the task's cancellation is checked (`CancellationError`); after each, `afterChunk` gets the slices done,
     /// with no lock held. Every slice and every batch runs in its own autorelease pool: without one, each batch's buffers
-    /// lived to the end of the scan (the first benchmark: 73 GB at 1024², 4096 positions).
+    /// lived to the end of the scan (the first benchmark: 73 GB at 1024², 4096 positions). `scratch`, the second wave
+    /// buffer, is allocated when nil; `afterLast(command buffer, exit)` encodes more work into the last chunk before its
+    /// commit, so that it costs no wait of its own (#61).
     static func propagate(_ p: MetalPreparedPotential, psi: MPSGraphTensorData, batch b: Int, planes: Set<Int>,
-                          options: ExecutionOptions, engine: MetalEngine,
+                          options: ExecutionOptions, engine: MetalEngine, scratch: MPSGraphTensorData? = nil,
                           afterChunk: (Int) throws -> Void = { _ in },
+                          afterLast: ((MPSCommandBuffer, MPSGraphTensorData) throws -> Void)? = nil,
                           read: (Int, MPSGraphTensorData) throws -> Void) throws {
         // No slice: the wave passes unchanged (the CPU path's answer; `0...last` trapped).
-        guard p.sliceCount > 0 else { return try read(-1, psi) }
+        guard p.sliceCount > 0 else {
+            if let afterLast {
+                try engine.locked {
+                    let cb = MPSCommandBuffer(from: engine.queue)
+                    try afterLast(cb, psi)
+                    cb.commit()
+                    WorkCounter.current?.countDeviceWait()
+                    cb.waitUntilCompleted()
+                    try engine.check(cb, "the work after the last slice")
+                }
+            }
+            return try read(-1, psi)
+        }
         precondition(p.source != .transmissions || p.renormalizedTransmissions == options.metalRenormalization,
                      "a potential prepared with metalRenormalization \(p.renormalizedTransmissions) runs with the same setting")
         let step = engine.locked { stepExecutable(p, batch: b, options: options, engine: engine) }
         var current = psi
-        var other = try engine.tensor([b, p.grid.nx, p.grid.ny], .complexFloat32).0
+        var other = try scratch ?? engine.tensor([b, p.grid.nx, p.grid.ny], .complexFloat32).0
         let last = p.sliceCount - 1
         var chunk = firstChunk
         var next = 0
@@ -584,8 +600,10 @@ extension MetalMultislice {
                     j += 1
                 }
                 try autoreleasepool {
+                    if j == last, let afterLast { try afterLast(cb, current) }
                     engine.notePeak()
                     cb.commit()
+                    WorkCounter.current?.countDeviceWait()
                     cb.waitUntilCompleted()
                     took = ContinuousClock.now - started
                     try engine.check(cb, "slice \(j)")
@@ -778,7 +796,11 @@ extension MetalMultislice {
         let nx = p.grid.nx, ny = p.grid.ny, n = p.grid.count
         let spectrumData = try engine.complex(spectrum)
         let scale = try engine.floats([Float(intensityScale)], [1])
+        // One set of buffers per batch shape, reused by every batch of it (#61: they were allocated per batch).
+        var buffers: ScanBuffers?
         for (start, used, b) in batchPlan(count: count, grid: p.grid, options: options) {
+            if buffers?.batch != b { buffers = try ScanBuffers(batch: b, nx: nx, ny: ny, engine: engine) }
+            let buf = buffers!
             try autoreleasepool {
                 let probes = engine.locked {
                     probeStep(nx: nx, ny: ny, batch: b, limit: options.metalExecutableCacheLimit, engine: engine)
@@ -797,8 +819,12 @@ extension MetalMultislice {
                         ], targets: [out]), placeholders: ["psi": psi, "scale": sc])
                     }
                 }
-                var rx = [Float](repeating: 0, count: 2 * b * nx), ry = [Float](repeating: 0, count: 2 * b * ny)
-                for k in 0..<used {  // the padded positions keep zero ramps: zero probes
+                // The padded positions get zero ramps: zero probes, never read.
+                let rx = buf.rxBuffer.contents().bindMemory(to: Float.self, capacity: 2 * b * nx)
+                let ry = buf.ryBuffer.contents().bindMemory(to: Float.self, capacity: 2 * b * ny)
+                (rx + 2 * used * nx).update(repeating: 0, count: 2 * (b - used) * nx)
+                (ry + 2 * used * ny).update(repeating: 0, count: 2 * (b - used) * ny)
+                for k in 0..<used {
                     let (fx, fy) = try ramps(start + k)
                     for i in 0..<nx {
                         rx[2 * (k * nx + i)] = Float(fx.real[i])
@@ -809,33 +835,41 @@ extension MetalMultislice {
                         ry[2 * (k * ny + i) + 1] = Float(fy.imaginary[i])
                     }
                 }
-                let rxData = try engine.floats(rx, [b, nx, 1], .complexFloat32)
-                let ryData = try engine.floats(ry, [b, 1, ny], .complexFloat32)
-                let (psi, _) = try engine.tensor([b, nx, ny], .complexFloat32)
-                try engine.locked {
+                // The probes go to the queue without a wait: the queue runs the first chunk after them (#61). Their
+                // command buffer is checked once the batch is done.
+                let probeBuffer = engine.locked { () -> MPSCommandBuffer in
                     let cb = MPSCommandBuffer(from: engine.queue)
                     _ = probes.executable.executable.encode(
-                        to: cb, inputs: probes.inputs(["spectrum": spectrumData, "rx": rxData, "ry": ryData]), results: [psi],
-                        executionDescriptor: nil)
+                        to: cb, inputs: probes.inputs(["spectrum": spectrumData, "rx": buf.rx, "ry": buf.ry]),
+                        results: [buf.psi], executionDescriptor: nil)
                     cb.commit()
-                    cb.waitUntilCompleted()
-                    try engine.check(cb, "probes")
+                    return cb
                 }
-                try propagate(p, psi: psi, batch: b, planes: [], options: options, engine: engine,
-                              afterChunk: { try afterChunk(start, $0, used) }) { j, exit in
-                    guard j == p.sliceCount - 1 else { return }
-                    let (values, buffer) = try engine.tensor([b, nx, ny], .float32)
-                    let cb2 = MPSCommandBuffer(from: engine.queue)
-                    _ = intensities.executable.executable.encode(
-                        to: cb2, inputs: intensities.inputs(["psi": exit, "scale": scale]), results: [values],
-                        executionDescriptor: nil)
-                    cb2.commit()
-                    cb2.waitUntilCompleted()
-                    try engine.check(cb2, "intensities")
-                    let pointer = buffer.contents().bindMemory(to: Float.self, capacity: b * n)
-                    for k in 0..<used {
-                        try deliver(start + k, (0..<n).map { Double(pointer[k * n + $0]) })
+                // The intensities ride in the last chunk's command buffer: one wait per chunk, none besides. A failure of
+                // the probes is reported first, also when the propagation throws.
+                do {
+                    try propagate(p, psi: buf.psi, batch: b, planes: [], options: options, engine: engine,
+                                  scratch: buf.other,
+                                  afterChunk: { try afterChunk(start, $0, used) },
+                                  afterLast: { cb, exit in
+                                      _ = intensities.executable.executable.encode(
+                                          to: cb, inputs: intensities.inputs(["psi": exit, "scale": scale]),
+                                          results: [buf.values], executionDescriptor: nil)
+                                  }) { j, _ in
+                        guard j == p.sliceCount - 1 || j == -1 else { return }
+                        try engine.check(probeBuffer, "probes")
+                        let pointer = buf.valuesBuffer.contents().bindMemory(to: Float.self, capacity: b * n)
+                        for k in 0..<used {
+                            let values = [Double](unsafeUninitializedCapacity: n) { out, initialized in
+                                vDSP_vspdp(pointer + k * n, 1, out.baseAddress!, 1, vDSP_Length(n))
+                                initialized = n
+                            }
+                            try deliver(start + k, values)
+                        }
                     }
+                } catch {
+                    try engine.check(probeBuffer, "probes")
+                    throw error
                 }
             }
         }
@@ -870,5 +904,25 @@ extension Multislice {
         let prepared = try MetalMultislice.prepare(potential, beam: beam, tilt: tilt, options: options, engine: engine)
         try MetalMultislice.scanIntensities(spectrum: spectrum, positions: positions, ramps: ramps, potential: prepared,
                                             intensityScale: 1, options: options, afterChunk: afterChunk, deliver: deliver)
+    }
+}
+
+/// The device buffers of one scan batch shape, reused by every batch of it: the probes' ramps, the two wave buffers and
+/// the intensities (#61).
+struct ScanBuffers {
+    let batch: Int
+    let rx: MPSGraphTensorData, rxBuffer: any MTLBuffer
+    let ry: MPSGraphTensorData, ryBuffer: any MTLBuffer
+    let psi: MPSGraphTensorData
+    let other: MPSGraphTensorData
+    let values: MPSGraphTensorData, valuesBuffer: any MTLBuffer
+
+    init(batch b: Int, nx: Int, ny: Int, engine: MetalEngine) throws {
+        batch = b
+        (rx, rxBuffer) = try engine.tensor([b, nx, 1], .complexFloat32)
+        (ry, ryBuffer) = try engine.tensor([b, 1, ny], .complexFloat32)
+        psi = try engine.tensor([b, nx, ny], .complexFloat32).0
+        other = try engine.tensor([b, nx, ny], .complexFloat32).0
+        (values, valuesBuffer) = try engine.tensor([b, nx, ny], .float32)
     }
 }
