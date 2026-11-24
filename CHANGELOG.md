@@ -6,6 +6,30 @@ what a consumer must change under **Migration**. Every version below is a git ta
 release-please writes each entry from the merged pull requests' titles, and a breaking change's Migration is its
 `BREAKING CHANGE:` note.
 
+## [0.7.0](https://github.com/EMSuite/SimulatoKit/compare/0.6.0...0.7.0) (2026-11-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* `SimulationProgress.Stage.buildingSlab` and `SimulationProgress.Unit.configurations` are removed; no run reported them. Migration: remove `case .buildingSlab` and `case .configurations` from switches over `SimulationProgress.Stage` and `SimulationProgress.Unit`.
+
+### Features
+
+* atom-model specimens and slabs (`CrystalCell(cellRows:...)`, `CrystalCell.padded`, `SlabBuilder.slab(ofModel:)`); the unused progress cases are gone ([#135](https://github.com/EMSuite/SimulatoKit/issues/135)) ([fa3637c](https://github.com/EMSuite/SimulatoKit/commit/fa3637c79cec4d7a3c231fc5271ffc59001de184))
+* flexible annular detector (radial bins per probe position) ([#124](https://github.com/EMSuite/SimulatoKit/issues/124)) ([e5e0db4](https://github.com/EMSuite/SimulatoKit/commit/e5e0db47877aeb896c22fa876d3ba9a17306c501))
+* partly occupied sites drawn per configuration ([#123](https://github.com/EMSuite/SimulatoKit/issues/123)) ([e566844](https://github.com/EMSuite/SimulatoKit/commit/e56684434f680e9517bbb64736b3b65719002a3e))
+* repeating slices share their transmission functions; Stop within one slice; faster CPU and Metal multislice ([#138](https://github.com/EMSuite/SimulatoKit/issues/138)) ([10384ad](https://github.com/EMSuite/SimulatoKit/commit/10384ad475a79edaf3c231a3ff4afa814f18b754))
+
+
+### Bug Fixes
+
+* a slab's z is depth below the face nearest the source ([#136](https://github.com/EMSuite/SimulatoKit/issues/136)) ([6666782](https://github.com/EMSuite/SimulatoKit/commit/666678232b2e643371841ce0b588fefb272e128b))
+
+
+### Performance Improvements
+
+* the slab builder cuts atoms only for the rung it takes, and Stop reaches it ([#135](https://github.com/EMSuite/SimulatoKit/issues/135)) ([fa3637c](https://github.com/EMSuite/SimulatoKit/commit/fa3637c79cec4d7a3c231fc5271ffc59001de184))
+
 ## [0.6.0](https://github.com/EMSuite/SimulatoKit/compare/0.5.0...0.6.0) (2026-11-24)
 
 
