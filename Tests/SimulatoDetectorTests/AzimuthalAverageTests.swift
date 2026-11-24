@@ -13,7 +13,7 @@ import SimulatoDetector
 @Suite("Azimuthal average")
 struct AzimuthalAverageTests {
     static func pattern(_ nx: Int, _ ny: Int, _ sx: Double, _ sy: Double) -> RealField {
-        RealField(nx: nx, ny: ny, values: (0..<(nx * ny)).map { pow(Double($0) + 1, 1.3) }, samplingX: sx, samplingY: sy)
+        RealField.unchecked(nx: nx, ny: ny, values: (0..<(nx * ny)).map { pow(Double($0) + 1, 1.3) }, samplingX: sx, samplingY: sy)
     }
 
     static let beam = try! ElectronBeam(energy: 200e3)
@@ -58,7 +58,7 @@ struct AzimuthalAverageTests {
 
     @Test func aRingWithNoPixelIsZero() throws {
         // A 1 x 1 pattern: one pixel at the centre; rings beyond a step width of it hold nothing.
-        let p = RealField(nx: 1, ny: 1, values: [3], samplingX: 0.05, samplingY: 0.05)
+        let p = RealField.unchecked(nx: 1, ny: 1, values: [3], samplingX: 0.05, samplingY: 0.05)
         let a = try p.azimuthalAverage(beam: Self.beam, maxAngle: 5, width: 0.5)
         #expect(a.count == 4 && a.values == [3, 0, 0, 0])
     }

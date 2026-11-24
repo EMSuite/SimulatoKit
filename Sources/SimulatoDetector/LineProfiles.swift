@@ -27,13 +27,36 @@ public protocol LineProfiles: Sendable, Hashable {
     /// The width the profiles were averaged over across the line, when they were.
     var lineWidth: Double? { get }
 
-    /// - Precondition: `values` holds the product of `ensembleShape` × `count` numbers.
+    /// - Throws: `SimulatoError.invalidShape` unless `values` holds the product of `ensembleShape` × `count` numbers.
     init(ensembleShape: [Int], count: Int, values: [Double], sampling: Double, start: SIMD2<Double>?, end: SIMD2<Double>?,
-         lineWidth: Double?)
+         lineWidth: Double?) throws
+}
+
+/// Whether `count` values fill `ensembleShape` × `points` (false on a negative axis or an overflow).
+func lineProfilesFill(_ ensembleShape: [Int], _ points: Int, _ count: Int) -> Bool {
+    var product = 1
+    for n in ensembleShape + [points] {
+        guard n >= 0 else { return false }
+        let (r, overflow) = product.multipliedReportingOverflow(by: n)
+        if overflow { return false }
+        product = r
+    }
+    return product == count
 }
 
 /// Real-space line profiles (abTEM `RealSpaceLineProfiles`): sampling in Å.
 public struct RealSpaceLineProfiles: LineProfiles {
+    /// The kit's own construction, from values it sized: a mismatch is a bug of the kit and traps.
+    package static func unchecked(ensembleShape: [Int] = [], count: Int, values: [Double], sampling: Double,
+                                  start: SIMD2<Double>? = nil, end: SIMD2<Double>? = nil, lineWidth: Double? = nil) -> Self {
+        do {
+            return try Self(ensembleShape: ensembleShape, count: count, values: values, sampling: sampling, start: start,
+                            end: end, lineWidth: lineWidth)
+        } catch {
+            preconditionFailure("\(error)")
+        }
+    }
+
     public let ensembleShape: [Int]
     public let count: Int
     public let values: [Double]
@@ -43,8 +66,10 @@ public struct RealSpaceLineProfiles: LineProfiles {
     public let lineWidth: Double?
 
     public init(ensembleShape: [Int] = [], count: Int, values: [Double], sampling: Double, start: SIMD2<Double>? = nil,
-                end: SIMD2<Double>? = nil, lineWidth: Double? = nil) {
-        precondition(values.count == ensembleShape.reduce(1, *) * count, "RealSpaceLineProfiles: the values do not fill the shape")
+                end: SIMD2<Double>? = nil, lineWidth: Double? = nil) throws {
+        guard lineProfilesFill(ensembleShape, count, values.count) else {
+            throw SimulatoError.invalidShape("ensemble shape \(ensembleShape) × \(count) points for \(values.count) values")
+        }
         self.ensembleShape = ensembleShape
         self.count = count
         self.values = values
@@ -66,8 +91,10 @@ public struct ReciprocalSpaceLineProfiles: LineProfiles {
     public let lineWidth: Double?
 
     public init(ensembleShape: [Int] = [], count: Int, values: [Double], sampling: Double, start: SIMD2<Double>? = nil,
-                end: SIMD2<Double>? = nil, lineWidth: Double? = nil) {
-        precondition(values.count == ensembleShape.reduce(1, *) * count, "ReciprocalSpaceLineProfiles: the values do not fill the shape")
+                end: SIMD2<Double>? = nil, lineWidth: Double? = nil) throws {
+        guard lineProfilesFill(ensembleShape, count, values.count) else {
+            throw SimulatoError.invalidShape("ensemble shape \(ensembleShape) × \(count) points for \(values.count) values")
+        }
         self.ensembleShape = ensembleShape
         self.count = count
         self.values = values
@@ -159,7 +186,7 @@ extension LineProfiles {
             let c = SplineInterpolation.coefficients(padded, order: order)
             for (k, x) in positions.enumerated() { out[p * points + k] = SplineInterpolation.evaluate(c, at: x, order: order) }
         }
-        return Self(ensembleShape: ensembleShape, count: points, values: out, sampling: s!, start: start, end: end,
+        return try Self(ensembleShape: ensembleShape, count: points, values: out, sampling: s!, start: start, end: end,
                     lineWidth: lineWidth)
     }
 }
@@ -185,7 +212,7 @@ extension ScanMeasurement {
         let n = scan.gpts, v = valueCount
         var moved = [Double](repeating: 0, count: values.count)
         for i in 0..<n { for k in 0..<v { moved[k * n + i] = values[i * v + k] } }
-        return RealSpaceLineProfiles(ensembleShape: valueShape, count: n, values: moved, sampling: scan.sampling,
+        return try RealSpaceLineProfiles(ensembleShape: valueShape, count: n, values: moved, sampling: scan.sampling,
                                      start: scan.start, end: scan.end)
     }
 }

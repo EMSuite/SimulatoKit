@@ -126,7 +126,7 @@ func checkDetector(_ r: inout Report) {
         let typed: [ScanMeasurement] = ms  // the bare name, beside Foundation's Measurement (renamed for 0.1.0)
         r.equal("the result type is ScanMeasurement", String(reflecting: type(of: typed[0])), "SimulatoDetector.ScanMeasurement")
         // A consumer can build an intensity and test its own detector on it.
-        let given = DiffractionIntensity(grid: vacuum.grid, beam: beam, values: [Double](repeating: 1, count: vacuum.grid.count))
+        let given = try DiffractionIntensity(grid: vacuum.grid, beam: beam, values: [Double](repeating: 1, count: vacuum.grid.count))
         r.equal("DiffractionIntensity(grid:beam:values:): a custom detector on a known intensity",
                 try TotalDetector().detect(given), [Double(vacuum.grid.count)])
         let lazy = try Potential(structure: empty, nx: 32, ny: 32, sliceThickness: 2)

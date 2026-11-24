@@ -44,6 +44,8 @@ public enum SimulatoError: Error, Sendable, Equatable, CustomStringConvertible {
     /// The waves of one batch have different energies [eV]: the first wave's and another's (a batch shares its
     /// transmission functions and propagators).
     case mixedEnergies(first: Double, other: Double)
+    /// Values that do not fill the shape they are given (or a shape the call cannot take), with the reason.
+    case invalidShape(String)
 
     public var description: String {
         switch self {
@@ -80,6 +82,7 @@ public enum SimulatoError: Error, Sendable, Equatable, CustomStringConvertible {
         case .tooManyAtoms(let n, let limit): return "the slab would hold \(n) atoms, more than the \(limit) allowed"
         case .mixedEnergies(let first, let other):
             return "the waves of one batch must share one energy, got \(first) eV and \(other) eV; run each energy separately"
+        case .invalidShape(let why): return "invalid shape: \(why)"
         }
     }
 }

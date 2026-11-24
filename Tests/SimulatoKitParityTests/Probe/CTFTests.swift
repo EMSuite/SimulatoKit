@@ -190,7 +190,7 @@ struct CTFTruthTests {
         // (b) the weak-phase prediction: φ = σ V (bandlimited as the transmission), I − 1 ≈ 2 IFFT[φ̂ sin χ A].
         let sigma = beam.interactionParameter
         let v = p.slices[0].values
-        let phase = ComplexField(nx: 128, ny: 128, real: v.map { sigma * $0 }, imaginary: [Double](repeating: 0, count: v.count))
+        let phase = ComplexField.unchecked(nx: 128, ny: 128, real: v.map { sigma * $0 }, imaginary: [Double](repeating: 0, count: v.count))
         var kernel = try ctf.kernel(on: p.grid, wavelength: beam.wavelength)  // exp(−iχ) A; sin χ A = −Im(kernel)
         for i in kernel.real.indices { kernel.real[i] = -kernel.imaginary[i]; kernel.imaginary[i] = 0 }
         let predicted = try Self.filter(phase, kernel, grid: p.grid).real.map { 2 * $0 }

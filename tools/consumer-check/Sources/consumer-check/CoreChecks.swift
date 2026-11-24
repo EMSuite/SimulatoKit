@@ -59,11 +59,11 @@ func checkCore(_ r: inout Report) {
             .gridTooLarge(rows: 1, columns: 1, required: 2, limit: 1), .invalidCell("x"), .invalidZoneAxis("x"),
             .invalidRepetitions(0), .invalidStrain(-1), .strainTooLarge(strain: 0.002, maximum: 0.001, repetitions: 10),
             .partialOccupancy(site: 0, occupancy: 0.5), .tooManyAtoms(count: 3, limit: 2),
-            .mixedEnergies(first: 2e5, other: 3e5),
+            .mixedEnergies(first: 2e5, other: 3e5), .invalidShape("x"),
         ]
-        r.equal("SimulatoError: 28 cases built", all.count, 28)
+        r.equal("SimulatoError: 29 cases built", all.count, 29)
         r.check("SimulatoError: every description is non-empty and distinct",
-                Set(all.map(\.description)).count == 28 && all.allSatisfy { !$0.description.isEmpty })
+                Set(all.map(\.description)).count == 29 && all.allSatisfy { !$0.description.isEmpty })
         r.equal("SimulatoError.invalidEnergy description", SimulatoError.invalidEnergy(-1).description,
                 "electron energy must be finite and positive, got -1.0 eV")
         r.check("SimulatoError is Equatable", SimulatoError.invalidPosition(index: 3) == .invalidPosition(index: 3)
@@ -146,21 +146,26 @@ func checkCore(_ r: inout Report) {
     r.section("Core: fields") { r in
         var f = ComplexField(nx: 2, ny: 3)
         r.check("ComplexField(nx:ny:) is zeros", f.real == [Double](repeating: 0, count: 6) && f.imaginary == f.real)
-        f = ComplexField(nx: 2, ny: 3, real: [3, 0, 0, 0, 0, 1], imaginary: [4, 0, 0, 0, 0, 0])
+        f = try ComplexField(nx: 2, ny: 3, real: [3, 0, 0, 0, 0, 1], imaginary: [4, 0, 0, 0, 0, 0])
         r.check("ComplexField subscript [ix * ny + iy]", f[0, 0] == (3, 4) && f[1, 2] == (1, 0))
         r.equal("ComplexField.squaredMagnitude", f.squaredMagnitude(), [25, 0, 0, 0, 0, 1])
         r.equal("ComplexField.maxMagnitude (3-4-5)", f.maxMagnitude, 5)
-        f.real[1] = 2
-        r.equal("ComplexField.real is mutable", f.real[1], 2)
+        r.refusesCase("ComplexField(nx:ny:real:imaginary:) with 5 values for 2 × 3", "invalidShape") {
+            try ComplexField(nx: 2, ny: 3, real: [Double](repeating: 0, count: 5), imaginary: [Double](repeating: 0, count: 6))
+        }
+        r.refusesCase("ComplexField with a zero axis", "invalidShape") { try ComplexField(nx: 0, ny: 3, real: [], imaginary: []) }
         r.check("ComplexField is Hashable and Equatable", f == f && f != ComplexField(nx: 2, ny: 3))
-        let rf = RealField(nx: 2, ny: 2, values: [1, 5, -3, 2], samplingX: 0.5, samplingY: 0.25)
+        r.refusesCase("RealField(nx:ny:values:...) with 3 values for 2 × 2", "invalidShape") {
+            try RealField(nx: 2, ny: 2, values: [1, 2, 3], samplingX: 1, samplingY: 1)
+        }
+        let rf = try RealField(nx: 2, ny: 2, values: [1, 5, -3, 2], samplingX: 0.5, samplingY: 0.25)
         r.check("RealField stores values and sampling", rf.nx == 2 && rf.ny == 2 && rf.samplingX == 0.5 && rf.samplingY == 0.25)
         r.equal("RealField subscript [ix, iy]", rf[1, 0], -3)
         r.equal("RealField.sum", rf.sum, 5)
         r.equal("RealField.max", rf.max, 5)
-        var rm = rf
-        rm.values[0] = 9
-        r.check("RealField.values is mutable, RealField is Hashable", rm.max == 9 && rm != rf)
+        let rm = try RealField(nx: 2, ny: 2, values: [9, 5, -3, 2], samplingX: 0.5, samplingY: 0.25)
+        let same = try RealField(nx: 2, ny: 2, values: [9, 5, -3, 2], samplingX: 0.5, samplingY: 0.25)
+        r.check("RealField is Hashable", rm.max == 9 && rm != rf && rm == same)
     }
 
     r.section("Core: waves") { r in
@@ -180,12 +185,15 @@ func checkCore(_ r: inout Report) {
         let cut = try w.diffractionPattern()
         r.check("diffractionPattern(): cropped to the cutoff, 23 × 23, peak 1 at (11, 11)",
                 cut.nx == 23 && cut.ny == 23 && abs(cut[11, 11] - 1) < 1e-12 && abs(cut.sum - 1) < 1e-12)
-        let probeLike = Waves(field: ComplexField(nx: 32, ny: 32, real: [Double](repeating: 1, count: 1024),
+        let probeLike = try Waves(field: ComplexField(nx: 32, ny: 32, real: [Double](repeating: 1, count: 1024),
                                                   imaginary: [Double](repeating: 0, count: 1024)),
                               grid: g, beam: beam, normalization: .reciprocalSpace)
         // .reciprocalSpace: no division by N, so the pattern of ψ = 1 sums to N² = 1024² (k = 0 carries N²).
         let pattern = try probeLike.diffractionPattern(maxAngle: .full)
         r.near("diffractionPattern with .reciprocalSpace is not divided by N (peak N²)", pattern[16, 16], 1024.0 * 1024.0, 1e-6)
+        r.refusesCase("Waves(field:grid:...) with a 16 × 16 field on a 32 × 32 grid", "invalidShape") {
+            try Waves(field: ComplexField(nx: 16, ny: 16), grid: g, beam: beam, normalization: .values)
+        }
         r.check("Waves.Normalization and Waves.MaxAngle cases", Waves.Normalization.values != .reciprocalSpace
                 && Waves.MaxAngle.cutoff != .full)
         r.check("Waves is Hashable", w == Waves.planeWave(beam: beam, grid: g) && w != probeLike)
@@ -197,7 +205,9 @@ func checkCore(_ r: inout Report) {
         let s = try AtomicStructure(box: SIMD3(4, 5, 6), atoms: [atom])
         r.check("AtomicStructure stores box and atoms", s.box == SIMD3(4, 5, 6) && s.atoms == [atom])
         // ASE order: x outermost, then y, then z; (1, 2, 3) shifted by multiples of the box (4, 5, 6).
-        let rep = s.repeated(2, 1, 2)
+        let rep = try s.repeated(2, 1, 2)
+        r.refusesCase("repeated(0, 1, 1)", "invalidShape") { try s.repeated(0, 1, 1) }
+        r.refusesCase("repeated with an atom count beyond an Int", "tooManyAtoms") { try s.repeated(1 << 31, 1 << 31, 1 << 31) }
         r.check("repeated(2, 1, 2): box doubles along x and z", rep.box == SIMD3(8, 5, 12))
         r.equal("repeated(2, 1, 2): positions in ASE order", rep.atoms.map(\.position),
                 [SIMD3(1, 2, 3), SIMD3(1, 2, 9), SIMD3(5, 2, 3), SIMD3(5, 2, 9)])

@@ -22,7 +22,7 @@ struct LineProfileTests {
         for spec in LinescanPins.list("scans") {
             let label = spec["label"] as! String
             let scan = try LineScanTests.scan(spec)
-            let profile = RealSpaceLineProfiles(count: scan.gpts, values: LinescanPins.doubles("scan.\(label).adf"),
+            let profile = RealSpaceLineProfiles.unchecked(count: scan.gpts, values: LinescanPins.doubles("scan.\(label).adf"),
                                                 sampling: scan.sampling, start: scan.start, end: scan.end)
             for h in [0.5, 0.2] {
                 let w = try profile.width(height: h)
@@ -35,7 +35,7 @@ struct LineProfileTests {
         for spec in LinescanPins.list("planted") {
             let label = spec["label"] as! String
             let shape = (spec["shape"] as! [Int])
-            let profile = RealSpaceLineProfiles(ensembleShape: Array(shape.dropLast()), count: shape.last!,
+            let profile = RealSpaceLineProfiles.unchecked(ensembleShape: Array(shape.dropLast()), count: shape.last!,
                                                 values: LinescanPins.doubles("planted.\(label).array"),
                                                 sampling: LinescanPins.num(spec["sampling"]))
             for h in [0.5, 0.25, 0.8] {
@@ -50,7 +50,7 @@ struct LineProfileTests {
         for spec in LinescanPins.list("scans") {
             let label = spec["label"] as! String
             let scan = try LineScanTests.scan(spec)
-            let profile = RealSpaceLineProfiles(count: scan.gpts, values: LinescanPins.doubles("scan.\(label).adf"),
+            let profile = RealSpaceLineProfiles.unchecked(count: scan.gpts, values: LinescanPins.doubles("scan.\(label).adf"),
                                                 sampling: scan.sampling, start: scan.start, end: scan.end)
             for (tag, entry) in spec["interp"] as! [String: [String: Any]] {
                 let args = entry["args"] as! [String: Any]
@@ -70,7 +70,7 @@ struct LineProfileTests {
         for spec in LinescanPins.list("planted") {
             let label = spec["label"] as! String
             let shape = (spec["shape"] as! [Int])
-            let profile = RealSpaceLineProfiles(ensembleShape: Array(shape.dropLast()), count: shape.last!,
+            let profile = RealSpaceLineProfiles.unchecked(ensembleShape: Array(shape.dropLast()), count: shape.last!,
                                                 values: LinescanPins.doubles("planted.\(label).array"),
                                                 sampling: LinescanPins.num(spec["sampling"]))
             for (tag, entry) in spec["interp"] as! [String: [String: Any]] {

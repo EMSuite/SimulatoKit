@@ -104,7 +104,7 @@ public struct STEMRun: Sendable {
                     values[q * c + i] = n > 0 ? values[q * c + i] / Double(n) : 0
                 }
             }
-            return ScanMeasurement(scanShape: scanShape, valueShape: shapes[d], values: values)
+            return ScanMeasurement.unchecked(scanShape: scanShape, valueShape: shapes[d], values: values)
         }
     }
 
@@ -193,7 +193,7 @@ public struct STEMRun: Sendable {
                     reporter.report(snapshot(.scanning, slicesDone: done, slices: slices, batch: done < slices ? used : 0))
                 },
                 deliver: { q, values in
-                    let intensity = DiffractionIntensity(grid: probe.grid, beam: probe.beam, values: values)
+                    let intensity = DiffractionIntensity.unchecked(grid: probe.grid, beam: probe.beam, values: values)
                     try STEM.accumulate(intensity, at: start + q, detectors, counts, &sums)
                     completedPositions = start + q + 1
                 })
@@ -205,7 +205,7 @@ public struct STEMRun: Sendable {
                     reporter.report(snapshot(.scanning, slicesDone: done, slices: slices, batch: done < slices ? used : 0))
                 },
                 deliver: { q, values in
-                    let intensity = DiffractionIntensity(grid: probe.grid, beam: probe.beam, values: values)
+                    let intensity = DiffractionIntensity.unchecked(grid: probe.grid, beam: probe.beam, values: values)
                     try STEM.accumulate(intensity, at: start + q, detectors, counts, &sums)
                     completedPositions = start + q + 1
                 })

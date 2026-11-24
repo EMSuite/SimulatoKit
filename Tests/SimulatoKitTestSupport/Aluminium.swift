@@ -10,5 +10,5 @@ package func aluminiumStructure(cells: (Int, Int, Int)) throws -> AtomicStructur
         .init(atomicNumber: 13, position: SIMD3(0, 0, 0)), .init(atomicNumber: 13, position: SIMD3(0, 2.025, 2.025)),
         .init(atomicNumber: 13, position: SIMD3(2.025, 0, 2.025)), .init(atomicNumber: 13, position: SIMD3(2.025, 2.025, 0)),
     ])
-    return cell.repeated(cells.0, cells.1, cells.2)
+    return try cell.repeated(cells.0, cells.1, cells.2)
 }

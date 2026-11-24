@@ -50,8 +50,8 @@ enum IcomPins {
     static func gradient(_ name: String, nx: Int, ny: Int, sx: Double, sy: Double) -> (x: RealField, y: RealField) {
         let d = doubles(name)
         let gx = stride(from: 0, to: d.count, by: 2).map { d[$0] }, gy = stride(from: 1, to: d.count, by: 2).map { d[$0] }
-        return (RealField(nx: nx, ny: ny, values: gx, samplingX: sx, samplingY: sy),
-                RealField(nx: nx, ny: ny, values: gy, samplingX: sx, samplingY: sy))
+        return (RealField.unchecked(nx: nx, ny: ny, values: gx, samplingX: sx, samplingY: sy),
+                RealField.unchecked(nx: nx, ny: ny, values: gy, samplingX: sx, samplingY: sy))
     }
 
     /// assert_allclose(actual, desired, rtol: 1e-7, atol: 1e-12 · max|desired|): the worst excess over the bound, ≤ 0 passes.
@@ -142,7 +142,7 @@ struct IcomPinsTests {
     @Test func integrateDiscMatchesAbTEM() throws {
         let d = IcomPins.json["disc"] as! [String: Any]
         let shape = d["shape"] as! [Int], s = IcomPins.vec(d["sampling"]!)
-        let image = RealField(nx: shape[0], ny: shape[1], values: IcomPins.doubles("disc_image"), samplingX: s[0], samplingY: s[1])
+        let image = RealField.unchecked(nx: shape[0], ny: shape[1], values: IcomPins.doubles("disc_image"), samplingX: s[0], samplingY: s[1])
         for case let c as [String: Any] in d["cases"] as! [Any] {
             let p = IcomPins.vec(c["position"]!), r = (c["radius"] as! NSNumber).doubleValue
             let sum = try image.integrateDisc(x: p[0], y: p[1], radius: r)
@@ -156,7 +156,7 @@ struct IcomPinsTests {
     @Test func tileMatchesAbTEMExactly() throws {
         let d = IcomPins.json["disc"] as! [String: Any]
         let shape = d["shape"] as! [Int], s = IcomPins.vec(d["sampling"]!)
-        let image = RealField(nx: shape[0], ny: shape[1], values: IcomPins.doubles("disc_image"), samplingX: s[0], samplingY: s[1])
+        let image = RealField.unchecked(nx: shape[0], ny: shape[1], values: IcomPins.doubles("disc_image"), samplingX: s[0], samplingY: s[1])
         let t = IcomPins.json["tile"] as! [String: Any]
         let reps = t["repetitions"] as! [Int], tiledShape = t["shape"] as! [Int]
         let out = try image.tiled(repetitionsX: reps[0], repetitionsY: reps[1])

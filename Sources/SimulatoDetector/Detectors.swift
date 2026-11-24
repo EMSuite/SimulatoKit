@@ -16,9 +16,21 @@ public struct DiffractionIntensity: Sendable {
     public let values: [Double]
 
     /// An intensity given directly, |FFT₂(ψ)|² in FFT order (for example to test a custom `Detector`).
-    /// - Precondition: `values` holds nx × ny values.
-    public init(grid: Grid, beam: ElectronBeam, values: [Double]) {
+    /// - Throws: `SimulatoError.invalidShape` unless `values` holds nx × ny values.
+    public init(grid: Grid, beam: ElectronBeam, values: [Double]) throws {
+        guard values.count == grid.count else {
+            throw SimulatoError.invalidShape("a \(grid.nx) x \(grid.ny) intensity needs \(grid.count) values, got \(values.count)")
+        }
+        self.init(storing: grid, beam, values)
+    }
+
+    /// The kit's own construction, from an array it sized: a mismatch is a bug of the kit and traps.
+    package static func unchecked(grid: Grid, beam: ElectronBeam, values: [Double]) -> DiffractionIntensity {
         precondition(values.count == grid.count, "DiffractionIntensity: \(grid.nx) x \(grid.ny) values required")
+        return DiffractionIntensity(storing: grid, beam, values)
+    }
+
+    private init(storing grid: Grid, _ beam: ElectronBeam, _ values: [Double]) {
         self.grid = grid
         self.beam = beam
         self.values = values
@@ -32,7 +44,7 @@ public struct DiffractionIntensity: Sendable {
             for i in f.real.indices { f.real[i] /= n; f.imaginary[i] /= n }
         }
         try FFT2D(nx: waves.grid.nx, ny: waves.grid.ny).forward(&f)
-        self.init(grid: waves.grid, beam: waves.beam, values: f.squaredMagnitude())
+        try self.init(grid: waves.grid, beam: waves.beam, values: f.squaredMagnitude())
     }
 
     /// Angular sampling per axis [mrad per pixel]: (1 / extent) · λ · 10³.

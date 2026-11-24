@@ -38,7 +38,7 @@ extension Waves {
         // ifft2 divides by the new point count, abTEM then multiplies by new / old.
         let scale = Double(rows * columns) / Double(grid.count)
         for i in out.real.indices { out.real[i] *= scale; out.imaginary[i] *= scale }
-        return Waves(field: out, grid: target, beam: beam, normalization: normalization, tilt: tilt)
+        return Waves.unchecked(field: out, grid: target, beam: beam, normalization: normalization, tilt: tilt)
     }
 
     /// (source index, destination index) of every frequency that survives going from n to m points (abTEM's

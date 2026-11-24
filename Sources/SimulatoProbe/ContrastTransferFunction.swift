@@ -149,6 +149,6 @@ extension Waves {
             f.imaginary[i] = a * d + b * c
         }
         fft.inverse(&f)
-        return Waves(field: f, grid: grid, beam: beam, normalization: normalization, tilt: tilt)
+        return Waves.unchecked(field: f, grid: grid, beam: beam, normalization: normalization, tilt: tilt)
     }
 }

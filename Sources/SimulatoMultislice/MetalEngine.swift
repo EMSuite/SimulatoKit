@@ -531,7 +531,7 @@ extension MetalMultislice {
         try propagate(p, psi: psi, batch: 1, planes: wanted, options: options, engine: engine,
                       afterChunk: afterChunk) { j, data in
             guard wanted.contains(j) else { return }
-            result.append(Waves(field: fields(data, batch: 1, grid: p.grid)[0], grid: p.grid, beam: incident.beam,
+            result.append(Waves.unchecked(field: fields(data, batch: 1, grid: p.grid)[0], grid: p.grid, beam: incident.beam,
                                 normalization: incident.normalization, tilt: incident.tilt))
         }
         return result

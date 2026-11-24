@@ -59,7 +59,7 @@ public struct Potential: Sendable, Hashable {
         self.sliceThicknesses = thicknesses
         self.parameterization = parameterization
         self.atoms = atoms
-        self.sliceOfAtom = Slicing.sliceIndices(z: atoms.map(\.position.z), thicknesses: thicknesses)
+        self.sliceOfAtom = try Slicing.sliceIndices(z: atoms.map(\.position.z), thicknesses: thicknesses)
     }
 
     /// The number of slices.

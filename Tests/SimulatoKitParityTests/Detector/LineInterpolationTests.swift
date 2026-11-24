@@ -19,13 +19,13 @@ struct LineInterpolationTests {
     static var image: RealField {
         let s = LinescanPins.vec((LinescanPins.json["image"] as! [String: Any])["sampling"]!)
         let n = (LinescanPins.json["image"] as! [String: Any])["shape"] as! [Int]
-        return RealField(nx: n[0], ny: n[1], values: LinescanPins.doubles("img.array"), samplingX: s[0], samplingY: s[1])
+        return RealField.unchecked(nx: n[0], ny: n[1], values: LinescanPins.doubles("img.array"), samplingX: s[0], samplingY: s[1])
     }
 
     static var pattern: RealField {
         let s = LinescanPins.vec((LinescanPins.json["pattern"] as! [String: Any])["sampling"]!)
         let n = (LinescanPins.json["pattern"] as! [String: Any])["shape"] as! [Int]
-        return RealField(nx: n[0], ny: n[1], values: LinescanPins.doubles("dp.array"), samplingX: s[0], samplingY: s[1])
+        return RealField.unchecked(nx: n[0], ny: n[1], values: LinescanPins.doubles("dp.array"), samplingX: s[0], samplingY: s[1])
     }
 
     @Test func interpolateLineEqualsAbTEM() throws {

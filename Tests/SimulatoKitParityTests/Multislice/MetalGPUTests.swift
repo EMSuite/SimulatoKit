@@ -232,7 +232,7 @@ struct MetalGPUTests {
     /// A potential with no slice returns the incident wave on `.metal`, as on `.cpu` (it trapped).
     @Test func noSliceReturnsTheIncidentWave() throws {
         let grid = try Grid(nx: 64, ny: 64, extentX: 8, extentY: 8)
-        let empty = ProjectedPotential(grid: grid, slices: [])
+        let empty = ProjectedPotential.unchecked(grid: grid, slices: [])
         let wave = Waves.planeWave(beam: try ElectronBeam(energy: 200e3), grid: grid)
         let cpu = try Multislice.run(wave, through: empty, backend: .cpu)
         let gpu = try Multislice.run(wave, through: empty, backend: .metal)
@@ -249,7 +249,7 @@ struct MetalGPUTests {
         let one = Waves.planeWave(beam: beam, grid: lazy.grid)
         var field = one.field
         field.real = field.real.map { $0 * 1e8 }
-        let big = Waves(field: field, grid: lazy.grid, beam: beam, normalization: .values)
+        let big = Waves.unchecked(field: field, grid: lazy.grid, beam: beam, normalization: .values)
         let gpu = try Multislice.run(big, through: lazy, backend: .metal)[0]
         let cpu = try Multislice.run(big, through: lazy, backend: .cpu)[0]
         #expect(gpu.field.real.allSatisfy(\.isFinite) && gpu.field.imaginary.allSatisfy(\.isFinite), "finite")

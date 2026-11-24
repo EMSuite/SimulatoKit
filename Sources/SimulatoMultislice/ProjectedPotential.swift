@@ -52,11 +52,18 @@ public struct ProjectedPotential: Sendable, Hashable {
     }
 
     /// A potential from slices computed elsewhere (for example the slices of another potential).
-    public init(grid: Grid, slices: [PotentialSlice]) {
+    /// - Throws: `SimulatoError.invalidShape` unless every slice holds the grid's nx × ny values.
+    public init(grid: Grid, slices: [PotentialSlice]) throws {
+        if let j = slices.firstIndex(where: { $0.values.count != grid.count }) {
+            throw SimulatoError.invalidShape("slice \(j) holds \(slices[j].values.count) values, the \(grid.nx) x \(grid.ny) grid \(grid.count)")
+        }
+        self.init(grid: grid, slices: slices, sliceOfAtom: [])
+    }
+
+    /// The kit's own construction, from slices it built on `grid`: a mismatch is a bug of the kit and traps.
+    package static func unchecked(grid: Grid, slices: [PotentialSlice]) -> ProjectedPotential {
         precondition(slices.allSatisfy { $0.values.count == grid.count }, "every slice must match the grid")
-        self.grid = grid
-        self.slices = slices
-        self.sliceOfAtom = []
+        return ProjectedPotential(grid: grid, slices: slices, sliceOfAtom: [])
     }
 
     /// The total thickness [Å].
@@ -69,7 +76,7 @@ public struct ProjectedPotential: Sendable, Hashable {
         for slice in slices {
             for i in sum.indices { sum[i] += slice.values[i] }
         }
-        return RealField(nx: grid.nx, ny: grid.ny, values: sum, samplingX: grid.samplingX, samplingY: grid.samplingY)
+        return RealField.unchecked(nx: grid.nx, ny: grid.ny, values: sum, samplingX: grid.samplingX, samplingY: grid.samplingY)
     }
 
     /// The potential tiled `repetitionsX` × `repetitionsY` times in the plane and `repetitionsZ` times along the beam
@@ -93,7 +100,7 @@ public struct ProjectedPotential: Sendable, Hashable {
         var tiledSlices: [PotentialSlice] = []
         tiledSlices.reserveCapacity(slices.count)
         for slice in slices {
-            let image = RealField(nx: grid.nx, ny: grid.ny, values: slice.values,
+            let image = RealField.unchecked(nx: grid.nx, ny: grid.ny, values: slice.values,
                                   samplingX: grid.samplingX, samplingY: grid.samplingY)
             let tiledImage = try image.tiled(repetitionsX: repetitionsX, repetitionsY: repetitionsY)
             tiledSlices.append(PotentialSlice(thickness: slice.thickness, values: tiledImage.values))

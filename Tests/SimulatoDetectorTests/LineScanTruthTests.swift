@@ -28,7 +28,7 @@ struct LineScanTruthTests {
 
     @Test func aLinearImageIsInterpolatedExactly() throws {
         // a plane 2 i + 3 j: linear interpolation is exact between pixels (inside, clear of the periodic seam)
-        let image = RealField(nx: 20, ny: 16, values: (0..<20).flatMap { i in (0..<16).map { j in 2.0 * Double(i) + 3.0 * Double(j) } },
+        let image = RealField.unchecked(nx: 20, ny: 16, values: (0..<20).flatMap { i in (0..<16).map { j in 2.0 * Double(i) + 3.0 * Double(j) } },
                               samplingX: 0.5, samplingY: 0.5)
         let r = try image.interpolateLine(start: SIMD2(2, 1), end: SIMD2(5, 3.5), gpts: 7, order: 1, endpoint: true)
         for (k, v) in r.values.enumerated() {
@@ -53,7 +53,7 @@ struct LineScanTruthTests {
     }
 
     @Test func interpolationRefusals() throws {
-        let image = RealField(nx: 4, ny: 4, values: [Double](repeating: 1, count: 16), samplingX: 1, samplingY: 1)
+        let image = RealField.unchecked(nx: 4, ny: 4, values: [Double](repeating: 1, count: 16), samplingX: 1, samplingY: 1)
         #expect(throws: SimulatoError.self) { try image.interpolateLine(end: SIMD2(1, 1), gpts: 3, order: 7) }
         #expect(throws: SimulatoError.self) { try image.interpolateLine(end: SIMD2(1, 1), gpts: 3, width: -1) }
         #expect(throws: SimulatoError.self) { try image.interpolateLine(start: SIMD2(1, 1), end: SIMD2(1, 1), gpts: 3, width: 1) }

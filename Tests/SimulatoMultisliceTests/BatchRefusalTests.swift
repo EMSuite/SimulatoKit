@@ -58,3 +58,22 @@ struct MetalLimitsTests {
         #expect(!MetalLimits.scatterIndexFits(elements: 3000, points: 1 << 20))
     }
 }
+
+/// #80: a potential from slices of the wrong size, and slicing with no thicknesses, trapped or gave −1.
+@Suite("Potential shape refusals")
+struct PotentialShapeRefusalTests {
+    @Test func slicesThatDoNotFillTheGridAreRefused() throws {
+        let grid = try Grid(nx: 4, ny: 4, extentX: 1, extentY: 1)
+        #expect(throws: SimulatoError.self) {
+            try ProjectedPotential(grid: grid, slices: [PotentialSlice(thickness: 1, values: [0, 1])])
+        }
+        let fine = PotentialSlice(thickness: 1, values: [Double](repeating: 0, count: 16))
+        #expect(try ProjectedPotential(grid: grid, slices: [fine]).slices.count == 1)
+    }
+
+    @Test func atomsWithNoSliceAreRefused() throws {
+        #expect(throws: SimulatoError.self) { try Slicing.sliceIndices(z: [0.5], thicknesses: []) }
+        #expect(try Slicing.sliceIndices(z: [], thicknesses: []) == [])
+        #expect(try Slicing.sliceIndices(z: [0.5, 1.5], thicknesses: [1, 1]) == [0, 1])
+    }
+}

@@ -228,7 +228,7 @@ struct SimulatoCoreTests {
     @Test func repeatFollowsASEOrder() throws {
         let s = try AtomicStructure(box: SIMD3(1, 2, 3), atoms: [.init(atomicNumber: 1, position: SIMD3(0.1, 0.2, 0.3)),
                                                                    .init(atomicNumber: 2, position: SIMD3(0.5, 0.5, 0.5))])
-        let r = s.repeated(2, 1, 2)
+        let r = try s.repeated(2, 1, 2)
         #expect(r.box == SIMD3(2, 2, 6))
         #expect(r.atoms.map(\.atomicNumber) == [1, 2, 1, 2, 1, 2, 1, 2])
         #expect(r.atoms[2].position == SIMD3(0.1, 0.2, 3.3))

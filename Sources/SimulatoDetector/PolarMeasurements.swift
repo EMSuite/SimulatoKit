@@ -71,7 +71,7 @@ extension ScanMeasurement {
         -> (direction1: ScanMeasurement, direction2: ScanMeasurement) {
         func difference(_ d: ([Int], [Int])) throws -> ScanMeasurement {
             let plus = try integrate(detectorRegions: d.1), minus = try integrate(detectorRegions: d.0)
-            return ScanMeasurement(scanShape: scanShape, valueShape: [], values: zip(plus.values, minus.values).map { $0 - $1 })
+            return ScanMeasurement.unchecked(scanShape: scanShape, valueShape: [], values: zip(plus.values, minus.values).map { $0 - $1 })
         }
         return (try difference(direction1), try difference(direction2))
     }
@@ -96,6 +96,6 @@ extension ScanMeasurement {
         let out = values.withUnsafeBufferPointer { all in
             (0..<positions).map { p in f(UnsafeBufferPointer(rebasing: all[(p * v)..<((p + 1) * v)])) }
         }
-        return ScanMeasurement(scanShape: scanShape, valueShape: [], values: out)
+        return ScanMeasurement.unchecked(scanShape: scanShape, valueShape: [], values: out)
     }
 }
