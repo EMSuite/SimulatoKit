@@ -4,8 +4,8 @@ The coverage table of abTEM 1.0.10 (`References/python/abtem`, git `164e644`): i
 the source in `site-packages/abtem` against SimulatoKit. Rewritten for 0.3.0 (the growing phase's kit audit); every row
 has one state and one priority.
 
-**Totals (131 rows): 39 present, 43 partial, 49 missing.** By priority: **study** 27 rows (12 present, 8 partial, 7 missing);
-**useful** 82 (27, 35, 20); **not planned** 22 (all missing, each with its reason).
+**Totals (134 rows): 43 present, 43 partial, 48 missing.** By priority: **study** 27 rows (12 present, 8 partial, 7 missing);
+**useful** 85 (31, 35, 19); **not planned** 22 (all missing, each with its reason).
 
 States:
 
