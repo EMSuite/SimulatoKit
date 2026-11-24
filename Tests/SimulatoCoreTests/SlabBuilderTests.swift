@@ -76,6 +76,24 @@ struct SlabBuilderTests {
         }
     }
 
+    /// The slab's z is depth below the entrance face (#126): along [0 0 1] the zone axis points at the source, so a gold
+    /// layer at the top of the cell (z = 0.9 c) is met first and a carbon layer at 0.1 c last; along [0 0 −1] the reverse.
+    @Test func theFaceNearestTheSourceIsAtDepthZero() throws {
+        let layered = try CrystalCell(a: 4, b: 4, c: 10, alpha: 90, beta: 90, gamma: 90, sites: [
+            CrystalCell.Site(atomicNumber: 79, fractional: SIMD3(0, 0, 0.9)),
+            CrystalCell.Site(atomicNumber: 6, fractional: SIMD3(0.5, 0.5, 0.1)),
+        ])
+        let cases: [(zone: SIMD3<Int>, goldFirst: Bool)] = [(SIMD3(0, 0, 1), true), (SIMD3(0, 0, -1), false)]
+        for (zone, goldFirst) in cases {
+            let slab = try SlabBuilder.slab(of: layered, zoneAxis: zone, thickness: 10, sliceThickness: 1)
+            #expect(slab.repeats.z == 1 && slab.structure.atoms.count == 2)
+            let gold: Double = slab.structure.atoms.first(where: { $0.atomicNumber == 79 })!.position.z
+            let carbon: Double = slab.structure.atoms.first(where: { $0.atomicNumber == 6 })!.position.z
+            #expect((gold < carbon) == goldFirst, "\(zone): gold at depth \(gold) Å, carbon at \(carbon) Å")
+            #expect(abs(abs(carbon - gold) - 8) <= 1e-9, "\(zone): the layers stay 8 Å apart")
+        }
+    }
+
     @Test func badInputsAreTypedRefusals() throws {
         let al = try aluminium()
         #expect(throws: SimulatoError.invalidZoneAxis("[0 0 0] is no direction")) {
@@ -96,6 +114,22 @@ struct SlabBuilderTests {
         ])
         #expect(throws: SimulatoError.partialOccupancy(site: 1, occupancy: 0.4)) {
             try SlabBuilder.slab(of: half, zoneAxis: SIMD3(0, 0, 1), thickness: 10)
+        }
+        // Allowed, every atom carries its site's occupancy through the turn, the cut, the shift and the repeat.
+        let drawn = try SlabBuilder.slab(of: half, zoneAxis: SIMD3(1, 1, 0), lateralSize: SIMD2(10, 10), thickness: 10,
+                                         allowsPartialOccupancy: true)
+        #expect(!drawn.structure.atoms.isEmpty && drawn.structure.hasPartialOccupancy)
+        #expect(drawn.structure.atoms.allSatisfy { $0.occupancy == ($0.atomicNumber == 12 ? 0.4 : 1) })
+        #expect(drawn.structure.atoms.filter { $0.atomicNumber == 12 }.count
+                    == drawn.structure.atoms.filter { $0.atomicNumber == 13 }.count)
+        // A site within 1e-6 of whole passes the refusal and is whole on every atom, so the potential takes it.
+        let nearlyWhole = try CrystalCell(a: 4.05, b: 4.05, c: 4.05, alpha: 90, beta: 90, gamma: 90, sites: [
+            CrystalCell.Site(atomicNumber: 13, fractional: .zero, occupancy: 0.9999995),
+        ])
+        for allows in [false, true] {
+            let slab = try SlabBuilder.slab(of: nearlyWhole, zoneAxis: SIMD3(0, 0, 1), thickness: 10,
+                                            allowsPartialOccupancy: allows)
+            #expect(slab.structure.atoms.allSatisfy { $0.occupancy == 1 } && !slab.structure.hasPartialOccupancy)
         }
         // Mg [1 0 3] needs 11.3 % at 5 repetitions and 0.22 % at 10, 20 and 40: refused at 0.1 %, carrying the strain; accepted at 1 %.
         do {
@@ -137,5 +171,52 @@ struct SlabBuilderTests {
                 guard case .invalidCell = error else { Issue.record("cell \(i): \(error)"); continue }
             }
         }
+    }
+
+    /// The ladder cuts atoms only for the rung it takes (#130): its unit is the one cut at that rung directly, atom for atom.
+    @Test func theLadderTakesTheRungItCuts() throws {
+        for zone in [SIMD3(1, 1, 1), SIMD3(1, 2, 3), SIMD3(2, 1, 0)] {
+            let taken = try SlabBuilder.orthogonalUnit(of: aluminium(), zoneAxis: zone)
+            let direct = try SlabBuilder.orthogonalUnit(of: aluminium(), zoneAxis: zone, maximumRepetitions: taken.maximumRepetitions)
+            #expect(taken.structure.box == direct.structure.box, "Al \(zone)")
+            #expect(taken.structure.atoms.map(\.position) == direct.structure.atoms.map(\.position), "Al \(zone)")
+            #expect(taken.supercell == direct.supercell && taken.strain == direct.strain, "Al \(zone)")
+        }
+    }
+
+    /// Stop reaches the ladder (#130): a cancelled task is answered with `CancellationError` before any rung is cut.
+    @Test func aCancelledLadderStops() async throws {
+        let al = try aluminium()
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try SlabBuilder.orthogonalUnit(of: al, zoneAxis: SIMD3(1, 2, 3))
+        }
+        await #expect(throws: CancellationError.self) { try await task.value }
+    }
+
+    /// A model's slab is the crystal's slab (#121): Al's conventional cell as a model, the beam along z, gives the slab of Al down
+    /// [0 0 1] (the zone frame is the identity there) at every thickness and lateral size, atom for atom; with no thickness it is
+    /// one period (a padded model is never stacked); a bad box is refused the same way.
+    @Test func aModelsSlabIsTheCrystalsSlab() throws {
+        let a = 4.05
+        let model = try CrystalCell(cellRows: [SIMD3(a, 0, 0), SIMD3(0, a, 0), SIMD3(0, 0, a)], atomicNumbers: [13, 13, 13, 13],
+                                    positions: Self.fcc.map { $0.fractional * a })
+        for (lateral, thickness) in [(nil, 20.0), (SIMD2(12.0, 9.0), 41.0)] as [(SIMD2<Double>?, Double)] {
+            let fromModel = try SlabBuilder.slab(ofModel: model, lateralSize: lateral, thickness: thickness)
+            let fromCrystal = try SlabBuilder.slab(of: aluminium(), zoneAxis: SIMD3(0, 0, 1), lateralSize: lateral, thickness: thickness)
+            #expect(fromModel.repeats == fromCrystal.repeats)
+            #expect(fromModel.sliceThicknesses == fromCrystal.sliceThicknesses)
+            #expect(fromModel.structure.atoms.count == fromCrystal.structure.atoms.count)
+            #expect(fromModel.structure.box == fromCrystal.structure.box)
+            #expect(fromModel.zShift == fromCrystal.zShift)
+            func key(_ a: AtomicStructure.Atom) -> [Double] { [a.position.z, a.position.y, a.position.x].map { ($0 * 1e6).rounded() } }
+            let m = fromModel.structure.atoms.map(key).sorted { $0.lexicographicallyPrecedes($1) }
+            let c = fromCrystal.structure.atoms.map(key).sorted { $0.lexicographicallyPrecedes($1) }
+            #expect(m == c, "the cut and the shift are the crystal's")
+        }
+        let onePeriod = try SlabBuilder.slab(ofModel: model)
+        #expect(onePeriod.repeats == SIMD3(1, 1, 1))
+        #expect(throws: SimulatoError.self) { try SlabBuilder.slab(ofModel: model, thickness: 0) }
+        #expect(throws: SimulatoError.self) { try SlabBuilder.slab(ofModel: model, sliceThickness: -1) }
     }
 }

@@ -207,11 +207,7 @@ package final class FFT2D {
     /// In place, with 1/(nx ny) (NumPy's `ifft2`).
     package func inverse(_ field: inout ComplexField) {
         transform(&field.real, &field.imaginary, inverse: true)
-        let scale = 1.0 / Double(nx * ny)
-        for i in field.real.indices {
-            field.real[i] *= scale
-            field.imaginary[i] *= scale
-        }
+        field.scale(by: 1.0 / Double(nx * ny))
     }
 
     private func transform(_ re: inout [Double], _ im: inout [Double], inverse: Bool) {

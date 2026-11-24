@@ -8,8 +8,6 @@
 public struct SimulationProgress: Sendable, Hashable {
     /// The part of the run under way.
     public enum Stage: Sendable, Hashable {
-        /// Building the slab from the crystal.
-        case buildingSlab
         /// Building the potential, the transmission functions or the GPU program: nothing to count yet.
         case preparing
         /// Propagating waves slice by slice.
@@ -22,7 +20,6 @@ public struct SimulationProgress: Sendable, Hashable {
     public enum Unit: Sendable, Hashable {
         case slices
         case positions
-        case configurations
     }
 
     public let stage: Stage

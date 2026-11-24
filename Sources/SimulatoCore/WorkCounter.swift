@@ -1,8 +1,9 @@
 //
 //  WorkCounter.swift
 //  Role: for the tests, a count of the expensive steps a run takes (potentials prepared, FFT plans made, probe spectra
-//        computed), bound to a task with `WorkCounter.$current.withValue`, so a test can show a scan does a step once
-//        and not once per chunk or position (#61). Counted on the calling thread only.
+//        computed, slice potentials and transmissions made), bound to a task with `WorkCounter.$current.withValue`, so a
+//        test can show a scan does a step once and not once per chunk, position or repeated slice (#61, #122). Counted
+//        on the calling thread only.
 //
 
 import Synchronization
@@ -15,6 +16,9 @@ package final class WorkCounter: Sendable {
     private let preparations = Mutex(0)
     private let fftPlans = Mutex(0)
     private let probeSpectra = Mutex(0)
+    private let slicePotentials = Mutex(0)
+    private let transmissions = Mutex(0)
+    private let deviceWaits = Mutex(0)
 
     package init() {}
 
@@ -24,8 +28,17 @@ package final class WorkCounter: Sendable {
     package var fftPlanCount: Int { fftPlans.withLock { $0 } }
     /// Probe spectra (aperture and aberration phase over the grid) computed for building probes.
     package var probeSpectrumCount: Int { probeSpectra.withLock { $0 } }
+    /// Slice potentials built on the CPU (`Potential.build()`), once per distinct slice (#122).
+    package var slicePotentialCount: Int { slicePotentials.withLock { $0 } }
+    /// Transmission functions computed (CPU) or cached on the GPU, once per distinct slice (#122).
+    package var transmissionCount: Int { transmissions.withLock { $0 } }
+    /// Waits for a Metal command buffer in a propagation (one per chunk of slices; #61).
+    package var deviceWaitCount: Int { deviceWaits.withLock { $0 } }
 
     package func countPreparation() { preparations.withLock { $0 += 1 } }
     package func countFFTPlan() { fftPlans.withLock { $0 += 1 } }
     package func countProbeSpectrum() { probeSpectra.withLock { $0 += 1 } }
+    package func countSlicePotential() { slicePotentials.withLock { $0 += 1 } }
+    package func countTransmission() { transmissions.withLock { $0 += 1 } }
+    package func countDeviceWait() { deviceWaits.withLock { $0 += 1 } }
 }

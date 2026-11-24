@@ -54,4 +54,5 @@ See <doc:MetalOnAppleGPUs> for how the Metal path is built and for memory and ac
 
 - ``FrozenPhonons``
 - ``FrozenPhonons/Directions``
+- ``OccupancyDraw``
 - ``GaussianGenerator``

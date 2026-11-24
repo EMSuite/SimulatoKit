@@ -71,6 +71,7 @@ public enum Slicing {
     public static func wrapped(_ structure: AtomicStructure) -> [AtomicStructure.Atom] {
         let box = structure.box
         return structure.atoms.map { atom in
+            var wrapped = atom
             var p = atom.position
             for d in 0..<3 {
                 var f = (p[d] / box[d]).truncatingRemainder(dividingBy: 1.0)
@@ -79,7 +80,8 @@ public enum Slicing {
                 p[d] = f * box[d]
             }
             if p.z > box.z - 1e-10 { p.z = 0 }
-            return AtomicStructure.Atom(atomicNumber: atom.atomicNumber, position: p)
+            wrapped.position = p
+            return wrapped
         }
     }
 

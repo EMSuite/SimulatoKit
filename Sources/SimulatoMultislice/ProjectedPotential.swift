@@ -26,6 +26,9 @@ public struct ProjectedPotential: Sendable, Hashable {
     public let slices: [PotentialSlice]
     /// The slice each atom of the structure was put in (in the structure's atom order).
     public let sliceOfAtom: [Int]
+    /// For each slice, the first slice known to equal it: from the atoms when `Potential.build()` made it (#122), each
+    /// slice itself otherwise (nothing is compared). Not part of equality.
+    package let firstEqualSlices: [Int]
 
     /// Builds the potential with slices of `sliceThickness` (abTEM's rule: ⌈Lz / s⌉ equal slices), at most
     /// `maximumSliceCount`.
@@ -45,10 +48,21 @@ public struct ProjectedPotential: Sendable, Hashable {
                              parameterization: parameterization, maximumSliceCount: maximumSliceCount).build()
     }
 
-    init(grid: Grid, slices: [PotentialSlice], sliceOfAtom: [Int]) {
+    init(grid: Grid, slices: [PotentialSlice], sliceOfAtom: [Int], firstEqualSlices: [Int]? = nil) {
         self.grid = grid
         self.slices = slices
         self.sliceOfAtom = sliceOfAtom
+        self.firstEqualSlices = firstEqualSlices ?? Array(slices.indices)
+    }
+
+    public static func == (a: ProjectedPotential, b: ProjectedPotential) -> Bool {
+        a.grid == b.grid && a.slices == b.slices && a.sliceOfAtom == b.sliceOfAtom
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(grid)
+        hasher.combine(slices)
+        hasher.combine(sliceOfAtom)
     }
 
     /// A potential from slices computed elsewhere (for example the slices of another potential).

@@ -103,6 +103,11 @@ for f, per in by.items():
         out.append(f"| {f} | Metal above {wins[0]}² (break-even between {prev[-1] if prev else '<' + str(wins[0])}² and {wins[0]}²) | {detail} |")
     else:
         out.append(f"| {f} | CPU only at the sizes measured | {detail} |")
+# Rows run.sh does not measure, kept verbatim from tools/benchmarks/hand-measured.md.
+hand = os.path.join(HERE, "hand-measured.md")
+if os.path.exists(hand):
+    out.append("")
+    out.append(open(hand).read().rstrip("\n"))
 with open(os.path.join(ROOT, "docs", "benchmarks.md"), "w") as f:
     f.write("\n".join(out) + "\n")
 print("docs/benchmarks.md written")

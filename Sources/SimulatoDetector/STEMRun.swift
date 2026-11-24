@@ -12,8 +12,8 @@ import SimulatoProbe
 /// A STEM scan that can stop and continue.
 ///
 /// ``run(progress:)`` scans the configurations in order and, within one, the positions in order. When its task is
-/// cancelled it throws `CancellationError` after the current round of positions (one position per CPU thread) or chunk of
-/// slices (Metal) and keeps every position finished so far; calling ``run(progress:)`` again continues from there. The
+/// cancelled it throws `CancellationError` within one slice on the CPU (the round of positions under way, one per thread,
+/// is dropped) or after the chunk of slices under way on Metal, and keeps every position finished before; calling ``run(progress:)`` again continues from there. The
 /// configurations' seeds are fixed by their index (`FrozenPhonons.configurationSeed`), so a continued run equals an
 /// uninterrupted one. The run is a value: keep the one that was stopped, and continue that one.
 public struct STEMRun: Sendable {

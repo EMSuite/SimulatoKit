@@ -15,14 +15,15 @@ for the method belongs to the abTEM authors. Licence: GPL-3.0-only (`LICENSE`, `
 SimulatoKit must be GPL-compatible. It is a library of numbers, not an application, and has no UI. It stands alone: it
 depends on no other package, and no other package depends on it yet.
 
-Current release: **0.5.0**. API reference (DocC, one catalogue per module):
+Current release: **0.7.0**. <!-- x-release-please-version -->
+API reference (DocC, one catalogue per module):
 [emsuite.github.io/SimulatoKit](https://emsuite.github.io/SimulatoKit/documentation/), published from every tag.
 
 ## Modules
 
 | Product | What it does |
 |---|---|
-| `SimulatoCore` | the electron beam (wavelength, interaction parameter), grids of any length from 2, complex and real fields, waves (intensity, diffraction pattern, beam tilt, Fourier resampling `Waves.resampled`), the antialias aperture, a minimal orthogonal-cell `AtomicStructure`, a crystal cell (`CrystalCell`) turned to a zone axis and cut into an orthogonal slab (`SlabBuilder`, abTEM's `orthogonalize_cell`), a float64 FFT; on images: `integratingGradient`, `integrateDisc`, `tiled`, `gaussianFiltered` |
+| `SimulatoCore` | the electron beam (wavelength, interaction parameter), grids of any length from 2, complex and real fields, waves (intensity, diffraction pattern, beam tilt, Fourier resampling `Waves.resampled`), the antialias aperture, a minimal orthogonal-cell `AtomicStructure`, a crystal cell (`CrystalCell`) turned to a zone axis and cut into an orthogonal slab (`SlabBuilder`, abTEM's `orthogonalize_cell`), a float64 FFT; on images: `integratingGradient`, `integrateDisc`, `tiled`, `gaussianFiltered`, `cropped`, `relativeDifference` |
 | `SimulatoMultislice` | the Lobato (default) and Kirkland parameterisations (`Parameterization`), slicing, the projected potential (from a grid or a sampling), transmission and Fresnel propagation, `Multislice.run` / `runBatch` on `.cpu` and `.metal`, `SimulationPlan` (sampling, grid, memory and time before a run), `BeamIntensities` (each zone-axis beam of a slab's exit waves by the crystal's hkl, at every stored thickness), frozen phonons, `ExecutionOptions` and `MetalAccuracy` |
 | `SimulatoProbe` | the soft aperture, polar aberrations C10 to C56, the probe at a position, `GridScan` and `LineScan`, `ContrastTransferFunction` (envelopes, Scherzer defocus, point resolution, crossover angle, radial profiles), `Waves.applying` for HRTEM and `images(of:defocus:tile:backend:)` for a series over defocus and thickness, on `.cpu` or `.metal` |
 | `SimulatoDetector` | annular (BF, ADF, HAADF), pixelated (4D-STEM), segmented (DPC), `CenterOfMassDetector` and `WavesDetector` (the exit wave at every position); `STEM.scan` over a grid or a line, averaged over frozen-phonon configurations; line interpolation (`interpolateLine`) and line profiles (`lineProfiles(for:)`), integrated centre of mass (`integratedCenterOfMass`), Gaussian source size and Poisson noise |
@@ -30,7 +31,7 @@ Current release: **0.5.0**. API reference (DocC, one catalogue per module):
 ## Installation
 
 ```swift
-.package(url: "https://github.com/EMSuite/SimulatoKit", from: "0.5.0")
+.package(url: "https://github.com/EMSuite/SimulatoKit", from: "0.7.0") // x-release-please-version
 // target dependencies, as needed:
 .product(name: "SimulatoMultislice", package: "SimulatoKit")  // also SimulatoCore, SimulatoProbe, SimulatoDetector
 ```

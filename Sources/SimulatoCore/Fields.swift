@@ -4,6 +4,8 @@
 //        both on a grid, x the first index, row-major `[ix * ny + iy]` (abTEM's `[x, y]`).
 //
 
+import Accelerate
+
 /// A complex array on an nx × ny grid, split into real and imaginary parts.
 public struct ComplexField: Sendable, Hashable {
     public let nx: Int
@@ -57,8 +59,60 @@ public struct ComplexField: Sendable, Hashable {
     /// |ψ|² per pixel (abTEM's `abs2`: re² + im²).
     public func squaredMagnitude() -> [Double] {
         var out = [Double](repeating: 0, count: real.count)
-        for i in out.indices { out[i] = real[i] * real[i] + imaginary[i] * imaginary[i] }
+        guard !out.isEmpty else { return out }
+        real.withUnsafeBufferPointer { r in
+            imaginary.withUnsafeBufferPointer { i in
+                var split = DSPDoubleSplitComplex(realp: UnsafeMutablePointer(mutating: r.baseAddress!),
+                                                  imagp: UnsafeMutablePointer(mutating: i.baseAddress!))
+                vDSP_zvmagsD(&split, 1, &out, 1, vDSP_Length(out.count))
+            }
+        }
         return out
+    }
+
+    /// The field as vDSP's split complex, for `body` to change in place (#61: the kit's loops on vDSP). The field must
+    /// not be empty.
+    private mutating func withSplitComplex<R>(_ body: (inout DSPDoubleSplitComplex, vDSP_Length) throws -> R) rethrows -> R {
+        let n = vDSP_Length(real.count)
+        return try real.withUnsafeMutableBufferPointer { r in
+            try imaginary.withUnsafeMutableBufferPointer { i in
+                var split = DSPDoubleSplitComplex(realp: r.baseAddress!, imagp: i.baseAddress!)
+                return try body(&split, n)
+            }
+        }
+    }
+
+    /// Every element times a real scale, in place.
+    package mutating func scale(by s: Double) {
+        guard !real.isEmpty else { return }
+        var factor = s
+        let n = vDSP_Length(real.count)
+        real.withUnsafeMutableBufferPointer { vDSP_vsmulD($0.baseAddress!, 1, &factor, $0.baseAddress!, 1, n) }
+        imaginary.withUnsafeMutableBufferPointer { vDSP_vsmulD($0.baseAddress!, 1, &factor, $0.baseAddress!, 1, n) }
+    }
+
+    /// Every element times the real `weights` (one per element), in place.
+    package mutating func multiply(byReal weights: [Double]) {
+        precondition(weights.count == real.count, "ComplexField: one weight per element required")
+        guard !real.isEmpty else { return }
+        let n = vDSP_Length(real.count)
+        weights.withUnsafeBufferPointer { w in
+            real.withUnsafeMutableBufferPointer { vDSP_vmulD($0.baseAddress!, 1, w.baseAddress!, 1, $0.baseAddress!, 1, n) }
+            imaginary.withUnsafeMutableBufferPointer { vDSP_vmulD($0.baseAddress!, 1, w.baseAddress!, 1, $0.baseAddress!, 1, n) }
+        }
+    }
+
+    /// Element-wise ψ ← ψ · t, in place (vDSP's complex multiply).
+    package mutating func multiply(by t: ComplexField) {
+        precondition(t.nx == nx && t.ny == ny, "ComplexField: shapes \(nx) x \(ny) and \(t.nx) x \(t.ny) differ")
+        guard !real.isEmpty else { return }
+        t.real.withUnsafeBufferPointer { tr in
+            t.imaginary.withUnsafeBufferPointer { ti in
+                var b = DSPDoubleSplitComplex(realp: UnsafeMutablePointer(mutating: tr.baseAddress!),
+                                              imagp: UnsafeMutablePointer(mutating: ti.baseAddress!))
+                withSplitComplex { a, n in vDSP_zvmulD(&a, 1, &b, 1, &a, 1, n, 1) }
+            }
+        }
     }
 
     /// The largest |ψ|.
