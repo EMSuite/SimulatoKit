@@ -15,7 +15,8 @@ for the method belongs to the abTEM authors. Licence: GPL-3.0-only (`LICENSE`, `
 SimulatoKit must be GPL-compatible. It is a library of numbers, not an application, and has no UI. It stands alone: it
 depends on no other package, and no other package depends on it yet.
 
-Current release: **0.5.0**. API reference (DocC, one catalogue per module):
+Current release: **0.5.0**. <!-- x-release-please-version -->
+API reference (DocC, one catalogue per module):
 [emsuite.github.io/SimulatoKit](https://emsuite.github.io/SimulatoKit/documentation/), published from every tag.
 
 ## Modules
@@ -30,7 +31,7 @@ Current release: **0.5.0**. API reference (DocC, one catalogue per module):
 ## Installation
 
 ```swift
-.package(url: "https://github.com/EMSuite/SimulatoKit", from: "0.5.0")
+.package(url: "https://github.com/EMSuite/SimulatoKit", from: "0.5.0") // x-release-please-version
 // target dependencies, as needed:
 .product(name: "SimulatoMultislice", package: "SimulatoKit")  // also SimulatoCore, SimulatoProbe, SimulatoDetector
 ```
