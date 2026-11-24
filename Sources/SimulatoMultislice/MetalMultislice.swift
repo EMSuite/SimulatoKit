@@ -90,7 +90,7 @@ extension Multislice {
         reporter.report(batchPreparing(incidents.count))
         try Task.checkCancellation()
         let tilt = backend == .metal ? try sharedTilt(incidents) : first.tilt
-        let prepared = try prepareBatch(potential, beam: first.beam, tilt: tilt, backend: backend)
+        let prepared = try prepareBatch(potential, beam: first.beam, tilt: tilt, backend: backend, options: options)
         return try runPrepared(incidents, prepared, options, &reporter)
     }
 
@@ -105,15 +105,16 @@ extension Multislice {
         reporter.report(batchPreparing(incidents.count))
         try Task.checkCancellation()
         let tilt = backend == .metal ? try sharedTilt(incidents) : first.tilt
-        let prepared = try prepareBatch(potential, beam: first.beam, tilt: tilt, backend: backend)
+        let prepared = try prepareBatch(potential, beam: first.beam, tilt: tilt, backend: backend, options: options)
         return try runPrepared(incidents, prepared, options, &reporter)
     }
 
     /// `potential` made ready once for many batches of `beam`'s energy (and, on `.metal`, of `tilt`): on `.cpu` the
     /// transmission functions and a workspace of FFT plans and propagators, on `.metal` the slices on the GPU. A scan
     /// that runs its positions in chunks prepares once and runs every chunk with `runBatch(_:prepared:options:progress:)`.
+    /// On `.metal`, `options` sets the transmission cache and its renormalisation: run with the same options.
     package static func prepareBatch(_ potential: ProjectedPotential, beam: ElectronBeam, tilt: SIMD2<Double>,
-                                     backend: Backend) throws -> PreparedBatch {
+                                     backend: Backend, options: ExecutionOptions = .standard) throws -> PreparedBatch {
         switch backend {
         case .cpu:
             let transmissions = try transmissionFunctions(potential, beam: beam)
@@ -121,14 +122,14 @@ extension Multislice {
                                  grid: potential.grid, energy: beam.energy, tilt: tilt)
         case .metal:
             let engine = try MetalEngine.require()
-            let prepared = try MetalMultislice.prepare(potential, beam: beam, tilt: tilt, engine: engine)
+            let prepared = try MetalMultislice.prepare(potential, beam: beam, tilt: tilt, options: options, engine: engine)
             return PreparedBatch(storage: .metal(prepared), grid: potential.grid, energy: beam.energy, tilt: tilt)
         }
     }
 
     /// The same for a `Potential`: on `.cpu` built here (`build()`), on `.metal` built slice by slice on the GPU.
     package static func prepareBatch(_ potential: Potential, beam: ElectronBeam, tilt: SIMD2<Double>,
-                                     backend: Backend) throws -> PreparedBatch {
+                                     backend: Backend, options: ExecutionOptions = .standard) throws -> PreparedBatch {
         switch backend {
         case .cpu:
             let built = try potential.build()
@@ -136,7 +137,7 @@ extension Multislice {
             return try prepareBatch(built, beam: beam, tilt: tilt, backend: .cpu)
         case .metal:
             let engine = try MetalEngine.require()
-            let prepared = try MetalMultislice.prepare(potential, beam: beam, tilt: tilt, engine: engine)
+            let prepared = try MetalMultislice.prepare(potential, beam: beam, tilt: tilt, options: options, engine: engine)
             return PreparedBatch(storage: .metal(prepared), grid: potential.grid, energy: beam.energy, tilt: tilt)
         }
     }
@@ -239,19 +240,23 @@ extension Multislice {
     package static func runMetal(_ incident: Waves, through potential: Potential, exitPlanes: ExitPlanes = .last,
                                  renormalize: Bool) throws -> [Waves] {
         let engine = try MetalEngine.require()
-        let prepared = try MetalMultislice.prepare(potential, beam: incident.beam, tilt: incident.tilt, engine: engine)
+        let options = ExecutionOptions(metalRenormalization: renormalize)
+        let prepared = try MetalMultislice.prepare(potential, beam: incident.beam, tilt: incident.tilt, options: options,
+                                                   engine: engine)
         return try MetalMultislice.run(incident, prepared: prepared,
                                        planes: exitPlanes.planes(sliceCount: potential.sliceCount),
-                                       options: ExecutionOptions(metalRenormalization: renormalize))
+                                       options: options)
     }
 
     package static func runMetal(_ incident: Waves, through potential: ProjectedPotential, exitPlanes: ExitPlanes = .last,
                                  renormalize: Bool) throws -> [Waves] {
         let engine = try MetalEngine.require()
-        let prepared = try MetalMultislice.prepare(potential, beam: incident.beam, tilt: incident.tilt, engine: engine)
+        let options = ExecutionOptions(metalRenormalization: renormalize)
+        let prepared = try MetalMultislice.prepare(potential, beam: incident.beam, tilt: incident.tilt, options: options,
+                                                   engine: engine)
         return try MetalMultislice.run(incident, prepared: prepared,
                                        planes: exitPlanes.planes(sliceCount: potential.slices.count),
-                                       options: ExecutionOptions(metalRenormalization: renormalize))
+                                       options: options)
     }
 }
 

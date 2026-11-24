@@ -39,8 +39,12 @@ package enum MetalLimits {
 }
 
 enum MetalSliceSource: Hashable {
+    /// Each step builds V from the atoms, then the transmission.
     case atoms(elements: Int, contributions: Int)
+    /// Each step takes uploaded V, then builds the transmission.
     case values
+    /// Each step takes a transmission made once per distinct slice at preparation (#122).
+    case transmissions
 }
 
 /// A compiled executable with its feeds in the executable's order.
@@ -266,13 +270,17 @@ enum MetalGraphs {
 }
 
 /// A potential prepared on the device for one beam: per-slice data, the kernels, the aperture, the propagators.
+/// Repeated slices share one tensor.
 struct MetalPreparedPotential: @unchecked Sendable {
     let grid: Grid
     let source: MetalSliceSource
-    /// `.atoms`: (indices, weights) per slice; `.values`: V per slice in `values`.
+    /// `.atoms`: (indices, weights) per slice; `.values`: V per slice in `values`; `.transmissions`: t per slice.
     let indices: [MPSGraphTensorData]
     let weights: [MPSGraphTensorData]
     let values: [MPSGraphTensorData]
+    var transmissions: [MPSGraphTensorData] = []
+    /// `.transmissions`: whether they were made with the per-step renormalisation; a run must use the same setting.
+    var renormalizedTransmissions = false
     let kernels: MPSGraphTensorData?
     let aperture: MPSGraphTensorData
     let propagators: [MPSGraphTensorData]
@@ -306,8 +314,10 @@ extension MetalMultislice {
         return perSlice.map { $0.sorted { $0.key < $1.key }.map { ($0.key, $0.value) } }
     }
 
+    /// `potential` on the device: each distinct slice's contributions uploaded once, and its transmission made once
+    /// when slices repeat and the distinct ones fit `options.metalTransmissionCacheBytes` (#122).
     static func prepare(_ potential: Potential, beam: ElectronBeam, tilt: SIMD2<Double> = .zero,
-                        engine: MetalEngine) throws -> MetalPreparedPotential {
+                        options: ExecutionOptions = .standard, engine: MetalEngine) throws -> MetalPreparedPotential {
         WorkCounter.current?.countPreparation()
         let grid = potential.grid
         let elements = Set(potential.atoms.map(\.atomicNumber)).sorted()
@@ -320,8 +330,14 @@ extension MetalMultislice {
         // Padded to a power of two (at least 16) so potentials of similar size share one executable; padding adds 0 at 0.
         var m = 16
         while m < (lists.map(\.count).max() ?? 0) { m *= 2 }
+        let first = potential.firstEqualSlices()
         var indices: [MPSGraphTensorData] = [], weights: [MPSGraphTensorData] = []
-        for list in lists {
+        for (j, list) in lists.enumerated() {
+            guard first[j] == j else {
+                indices.append(indices[first[j]])
+                weights.append(weights[first[j]])
+                continue
+            }
             var idx = [Int32](repeating: 0, count: m), w = [Float](repeating: 0, count: m)
             for (k, (i, v)) in list.enumerated() {
                 idx[k] = Int32(i)
@@ -336,25 +352,127 @@ extension MetalMultislice {
             let kernel = try builder.kernel(z)
             for i in 0..<grid.count { k[q * grid.count + i] = Float(kernel[i]) }
         }
-        return MetalPreparedPotential(
+        let prepared = MetalPreparedPotential(
             grid: grid, source: .atoms(elements: e, contributions: m), indices: indices, weights: weights, values: [],
             kernels: try engine.floats(k, [e, grid.nx, grid.ny]),
             aperture: try engine.floats(Antialias.aperture(on: grid).map(Float.init), [grid.nx, grid.ny]),
             propagators: try propagators(potential.sliceThicknesses, grid: grid, beam: beam, tilt: tilt, engine: engine),
             sigma: try engine.floats([Float(beam.interactionParameter)], [1]))
+        return try cachingTransmissions(prepared, firstEqual: first, options: options, engine: engine)
     }
 
+    /// The same for built slices: each slice `Potential.build()` found distinct uploaded once, its transmission cached
+    /// as above (slices from elsewhere are all taken as distinct; nothing is compared).
     static func prepare(_ potential: ProjectedPotential, beam: ElectronBeam, tilt: SIMD2<Double> = .zero,
-                        engine: MetalEngine) throws -> MetalPreparedPotential {
+                        options: ExecutionOptions = .standard, engine: MetalEngine) throws -> MetalPreparedPotential {
         WorkCounter.current?.countPreparation()
         let grid = potential.grid
-        return MetalPreparedPotential(
-            grid: grid, source: .values, indices: [], weights: [],
-            values: try potential.slices.map { try engine.floats($0.values.map(Float.init), [grid.nx, grid.ny]) },
-            kernels: nil,
+        let first = potential.firstEqualSlices
+        var values: [MPSGraphTensorData] = []
+        for (j, slice) in potential.slices.enumerated() {
+            if first[j] == j {
+                values.append(try engine.floats(slice.values.map(Float.init), [grid.nx, grid.ny]))
+            } else {
+                values.append(values[first[j]])
+            }
+        }
+        let prepared = MetalPreparedPotential(
+            grid: grid, source: .values, indices: [], weights: [], values: values, kernels: nil,
             aperture: try engine.floats(Antialias.aperture(on: grid).map(Float.init), [grid.nx, grid.ny]),
             propagators: try propagators(potential.slices.map(\.thickness), grid: grid, beam: beam, tilt: tilt, engine: engine),
             sigma: try engine.floats([Float(beam.interactionParameter)], [1]))
+        return try cachingTransmissions(prepared, firstEqual: first, options: options, engine: engine)
+    }
+
+    /// Whether `distinct` slices' transmissions (8 bytes per grid point each) are cached for a run of `slices` slices
+    /// on `points` grid points: only when some slice repeats and they fit `cacheBytes` (#122).
+    static func cachesTransmissions(distinct: Int, slices: Int, points: Int, cacheBytes: Int) -> Bool {
+        let (perSlice, o1) = points.multipliedReportingOverflow(by: 8)
+        let (bytes, o2) = perSlice.multipliedReportingOverflow(by: distinct)
+        return distinct < slices && !o1 && !o2 && bytes <= cacheBytes
+    }
+
+    /// `p` with the transmission of each distinct slice made once on the device (the graph each step would run, with
+    /// `options.metalRenormalization`) and shared by its repeats; `p` itself when no slice repeats or they do not fit.
+    /// One command buffer per distinct slice, so the device holds one slice's intermediates at a time.
+    static func cachingTransmissions(_ p: MetalPreparedPotential, firstEqual first: [Int], options: ExecutionOptions,
+                                     engine: MetalEngine) throws -> MetalPreparedPotential {
+        let distinct = first.indices.filter { first[$0] == $0 }
+        guard cachesTransmissions(distinct: distinct.count, slices: first.count, points: p.grid.count,
+                                  cacheBytes: options.metalTransmissionCacheBytes) else { return p }
+        let nx = p.grid.nx, ny = p.grid.ny
+        let exe = engine.locked { transmissionExecutable(p, renormalize: options.metalRenormalization, engine: engine) }
+        var made: [Int: MPSGraphTensorData] = [:]
+        for j in distinct {
+            try Task.checkCancellation()
+            WorkCounter.current?.countTransmission()
+            let (t, _) = try engine.tensor([nx, ny], .complexFloat32)
+            try engine.locked {
+                try autoreleasepool {
+                    let cb = MPSCommandBuffer(from: engine.queue)
+                    var named = ["aperture": p.aperture, "sigma": p.sigma]
+                    switch p.source {
+                    case .atoms:
+                        named["idx"] = p.indices[j]
+                        named["w"] = p.weights[j]
+                        named["kernels"] = p.kernels!
+                    case .values:
+                        named["v"] = p.values[j]
+                    case .transmissions:
+                        break
+                    }
+                    _ = exe.executable.executable.encode(to: cb, inputs: exe.inputs(named), results: [t],
+                                                         executionDescriptor: nil)
+                    engine.notePeak()
+                    cb.commit()
+                    cb.waitUntilCompleted()
+                    try engine.check(cb, "transmission of slice \(j)")
+                }
+            }
+            made[j] = t
+        }
+        return MetalPreparedPotential(grid: p.grid, source: .transmissions, indices: [], weights: [], values: [],
+                                      transmissions: first.map { made[$0]! },
+                                      renormalizedTransmissions: options.metalRenormalization, kernels: nil, aperture: p.aperture,
+                                      propagators: p.propagators, sigma: p.sigma)
+    }
+
+    /// The transmission of one slice from its atoms or its V: the steps' own graph pieces, without the wave.
+    static func transmissionExecutable(_ p: MetalPreparedPotential, renormalize: Bool, engine: MetalEngine) -> MetalStep {
+        let nx = p.grid.nx, ny = p.grid.ny
+        return engine.step("transmission \(p.source) \(nx)x\(ny) r\(renormalize)") {
+            let g = MPSGraph()
+            let aperture = g.placeholder(shape: MetalGraphs.shape([nx, ny]), dataType: .float32, name: "aperture")
+            let sigma = g.placeholder(shape: [1], dataType: .float32, name: "sigma")
+            var feeds: [(MPSGraphTensor, [Int], MPSDataType)] = [(aperture, [nx, ny], .float32), (sigma, [1], .float32)]
+            var named = ["aperture": aperture, "sigma": sigma]
+            let v = sliceValues(g, p.source, nx: nx, ny: ny, feeds: &feeds, named: &named)
+            let t = MetalGraphs.transmission(g, v: v, sigma: sigma, aperture: aperture, renormalize: renormalize)
+            return MetalStep(executable: MetalExecutable(g, device: engine.graphDevice, feeds: feeds, targets: [t]),
+                             placeholders: named)
+        }
+    }
+
+    /// V of one slice in graph `g`: built from the atoms' placeholders, or the uploaded values' placeholder.
+    static func sliceValues(_ g: MPSGraph, _ source: MetalSliceSource, nx: Int, ny: Int,
+                            feeds: inout [(MPSGraphTensor, [Int], MPSDataType)],
+                            named: inout [String: MPSGraphTensor]) -> MPSGraphTensor {
+        switch source {
+        case .atoms(let e, let m):
+            let idx = g.placeholder(shape: [NSNumber(value: m)], dataType: .int32, name: "idx")
+            let w = g.placeholder(shape: [NSNumber(value: m)], dataType: .float32, name: "w")
+            let k = g.placeholder(shape: MetalGraphs.shape([e, nx, ny]), dataType: .float32, name: "kernels")
+            feeds += [(idx, [m], .int32), (w, [m], .float32), (k, [e, nx, ny], .float32)]
+            named["idx"] = idx
+            named["w"] = w
+            named["kernels"] = k
+            return MetalGraphs.potential(g, idx: idx, w: w, kernels: k, elements: e, nx: nx, ny: ny)
+        case .values, .transmissions:
+            let values = g.placeholder(shape: MetalGraphs.shape([nx, ny]), dataType: .float32, name: "v")
+            feeds.append((values, [nx, ny], .float32))
+            named["v"] = values
+            return values
+        }
     }
 
     /// One complex64 propagator per distinct thickness, computed by the CPU path's code in float64.
@@ -377,32 +495,26 @@ extension MetalMultislice {
                            limit: options.metalExecutableCacheLimit) {
             let g = MPSGraph()
             let psi = g.placeholder(shape: MetalGraphs.shape([b, nx, ny]), dataType: .complexFloat32, name: "psi")
-            let aperture = g.placeholder(shape: MetalGraphs.shape([nx, ny]), dataType: .float32, name: "aperture")
             let prop = g.placeholder(shape: MetalGraphs.shape([nx, ny]), dataType: .complexFloat32, name: "p")
-            let sigma = g.placeholder(shape: [1], dataType: .float32, name: "sigma")
             var feeds: [(MPSGraphTensor, [Int], MPSDataType)] = [
-                (psi, [b, nx, ny], .complexFloat32), (aperture, [nx, ny], .float32), (prop, [nx, ny], .complexFloat32),
-                (sigma, [1], .float32),
+                (psi, [b, nx, ny], .complexFloat32), (prop, [nx, ny], .complexFloat32),
             ]
-            var named = ["psi": psi, "aperture": aperture, "p": prop, "sigma": sigma]
-            let v: MPSGraphTensor
-            switch p.source {
-            case .atoms(let e, let m):
-                let idx = g.placeholder(shape: [NSNumber(value: m)], dataType: .int32, name: "idx")
-                let w = g.placeholder(shape: [NSNumber(value: m)], dataType: .float32, name: "w")
-                let k = g.placeholder(shape: MetalGraphs.shape([e, nx, ny]), dataType: .float32, name: "kernels")
-                feeds += [(idx, [m], .int32), (w, [m], .float32), (k, [e, nx, ny], .float32)]
-                named["idx"] = idx
-                named["w"] = w
-                named["kernels"] = k
-                v = MetalGraphs.potential(g, idx: idx, w: w, kernels: k, elements: e, nx: nx, ny: ny)
-            case .values:
-                let values = g.placeholder(shape: MetalGraphs.shape([nx, ny]), dataType: .float32, name: "v")
-                feeds.append((values, [nx, ny], .float32))
-                named["v"] = values
-                v = values
+            var named = ["psi": psi, "p": prop]
+            let t: MPSGraphTensor
+            if p.source == .transmissions {
+                t = g.placeholder(shape: MetalGraphs.shape([nx, ny]), dataType: .complexFloat32, name: "t")
+                feeds.append((t, [nx, ny], .complexFloat32))
+                named["t"] = t
+            } else {
+                let aperture = g.placeholder(shape: MetalGraphs.shape([nx, ny]), dataType: .float32, name: "aperture")
+                let sigma = g.placeholder(shape: [1], dataType: .float32, name: "sigma")
+                feeds += [(aperture, [nx, ny], .float32), (sigma, [1], .float32)]
+                named["aperture"] = aperture
+                named["sigma"] = sigma
+                let v = sliceValues(g, p.source, nx: nx, ny: ny, feeds: &feeds, named: &named)
+                t = MetalGraphs.transmission(g, v: v, sigma: sigma, aperture: aperture,
+                                             renormalize: options.metalRenormalization)
             }
-            let t = MetalGraphs.transmission(g, v: v, sigma: sigma, aperture: aperture, renormalize: options.metalRenormalization)
             let out = MetalGraphs.propagate(g, psi: psi, t: t, p: prop, renormalize: options.metalRenormalization)
             return MetalStep(executable: MetalExecutable(g, device: engine.graphDevice, feeds: feeds, targets: [out]),
                              placeholders: named)
@@ -410,14 +522,20 @@ extension MetalMultislice {
     }
 
     static func stepInputs(_ p: MetalPreparedPotential, slice j: Int, psi: MPSGraphTensorData) -> [String: MPSGraphTensorData] {
-        var named = ["psi": psi, "aperture": p.aperture, "p": p.propagators[j], "sigma": p.sigma]
+        var named = ["psi": psi, "p": p.propagators[j]]
         switch p.source {
         case .atoms:
+            named["aperture"] = p.aperture
+            named["sigma"] = p.sigma
             named["idx"] = p.indices[j]
             named["w"] = p.weights[j]
             named["kernels"] = p.kernels!
         case .values:
+            named["aperture"] = p.aperture
+            named["sigma"] = p.sigma
             named["v"] = p.values[j]
+        case .transmissions:
+            named["t"] = p.transmissions[j]
         }
         return named
     }
@@ -440,6 +558,8 @@ extension MetalMultislice {
                           read: (Int, MPSGraphTensorData) throws -> Void) throws {
         // No slice: the wave passes unchanged (the CPU path's answer; `0...last` trapped).
         guard p.sliceCount > 0 else { return try read(-1, psi) }
+        precondition(p.source != .transmissions || p.renormalizedTransmissions == options.metalRenormalization,
+                     "a potential prepared with metalRenormalization \(p.renormalizedTransmissions) runs with the same setting")
         let step = engine.locked { stepExecutable(p, batch: b, options: options, engine: engine) }
         var current = psi
         var other = try engine.tensor([b, p.grid.nx, p.grid.ny], .complexFloat32).0
@@ -573,7 +693,7 @@ extension MetalMultislice {
         engine.runLock.lock()
         defer { engine.runLock.unlock() }
         let beam = try ElectronBeam(energy: 100e3)
-        let p = try prepare(potential, beam: beam, engine: engine)
+        let p = try prepare(potential, beam: beam, options: ExecutionOptions(metalTransmissionCacheBytes: 0), engine: engine)
         guard case .atoms(let e, let m) = p.source else { return [] }
         let nx = p.grid.nx, ny = p.grid.ny
         let step = engine.step("potential e\(e) m\(m) \(nx)x\(ny)") {
@@ -734,7 +854,7 @@ extension Multislice {
                                              afterChunk: (Int, Int, Int) throws -> Void = { _, _, _ in },
                                              deliver: (Int, [Double]) throws -> Void) throws {
         let engine = try MetalEngine.require()
-        let prepared = try MetalMultislice.prepare(potential, beam: beam, tilt: tilt, engine: engine)
+        let prepared = try MetalMultislice.prepare(potential, beam: beam, tilt: tilt, options: options, engine: engine)
         try MetalMultislice.scanIntensities(spectrum: spectrum, positions: positions, ramps: ramps, potential: prepared,
                                             intensityScale: 1, options: options, afterChunk: afterChunk, deliver: deliver)
     }
@@ -747,7 +867,7 @@ extension Multislice {
                                              afterChunk: (Int, Int, Int) throws -> Void = { _, _, _ in },
                                              deliver: (Int, [Double]) throws -> Void) throws {
         let engine = try MetalEngine.require()
-        let prepared = try MetalMultislice.prepare(potential, beam: beam, tilt: tilt, engine: engine)
+        let prepared = try MetalMultislice.prepare(potential, beam: beam, tilt: tilt, options: options, engine: engine)
         try MetalMultislice.scanIntensities(spectrum: spectrum, positions: positions, ramps: ramps, potential: prepared,
                                             intensityScale: 1, options: options, afterChunk: afterChunk, deliver: deliver)
     }

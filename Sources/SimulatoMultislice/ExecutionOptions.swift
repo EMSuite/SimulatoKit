@@ -32,19 +32,25 @@ public struct ExecutionOptions: Sendable, Hashable {
     public var metalExecutableCacheLimit: Int { didSet { metalExecutableCacheLimit = max(1, metalExecutableCacheLimit) } }
     /// How a remainder batch is shaped on Metal (default `.powersOfTwo`).
     public var metalBatchShapes: MetalBatchShapes
+    /// The bytes of transmission functions a Metal run may keep on the device for slices that repeat (default 1 GiB; a
+    /// distinct slice costs nx · ny · 8 bytes; 0 builds every slice's transmission in each step, as before #122). A run
+    /// with more distinct slices than fit builds them in each step. A negative value is raised to zero.
+    public var metalTransmissionCacheBytes: Int { didSet { metalTransmissionCacheBytes = max(0, metalTransmissionCacheBytes) } }
     /// The shortest time between two progress calls (default 0.1 s: at most ten calls a second; zero reports every chunk).
     /// A negative value is raised to zero.
     public var progressInterval: Duration { didSet { progressInterval = max(.zero, progressInterval) } }
 
     public init(maximumCPUThreads: Int = 8, metalBatchBytes: Int = 512 << 20, scanChunkBytes: Int = 256 << 20,
                 metalRenormalization: Bool = true, metalExecutableCacheLimit: Int = 12,
-                metalBatchShapes: MetalBatchShapes = .powersOfTwo, progressInterval: Duration = .milliseconds(100)) {
+                metalBatchShapes: MetalBatchShapes = .powersOfTwo, metalTransmissionCacheBytes: Int = 1 << 30,
+                progressInterval: Duration = .milliseconds(100)) {
         self.maximumCPUThreads = max(1, maximumCPUThreads)
         self.metalBatchBytes = max(1, metalBatchBytes)
         self.scanChunkBytes = max(1, scanChunkBytes)
         self.metalRenormalization = metalRenormalization
         self.metalExecutableCacheLimit = max(1, metalExecutableCacheLimit)
         self.metalBatchShapes = metalBatchShapes
+        self.metalTransmissionCacheBytes = max(0, metalTransmissionCacheBytes)
         self.progressInterval = max(.zero, progressInterval)
     }
 

@@ -110,11 +110,17 @@ public struct SimulationPlan: Sendable, Equatable {
         public var storedExitPlanes: Int
         /// The GPU memory for one batch of waves [bytes] (`ExecutionOptions.metalBatchBytes`).
         public var batchBytes: Int
+        /// The number of distinct slices when slices repeat (a crystal slab: its slices per period, `Slab.sliceThicknesses`
+        /// over `repeats.z`), nil when every slice differs (a frozen-phonon configuration).
+        public var distinctSlices: Int?
+        /// The bytes the run may keep for cached transmissions (`ExecutionOptions.metalTransmissionCacheBytes`).
+        public var transmissionCacheBytes: Int
 
         public init(extent: SIMD2<Double>, thickness: Double, sliceThickness: Double = 1, energy: Double,
                     largestAngle: Double, sampling: Double? = nil, elements: Int = 1, potential: PotentialSource = .atoms, illumination: Illumination = .planeWave,
                     configurations: Int = 1, storedExitPlanes: Int = 1,
-                    batchBytes: Int = ExecutionOptions.standard.metalBatchBytes) {
+                    batchBytes: Int = ExecutionOptions.standard.metalBatchBytes, distinctSlices: Int? = nil,
+                    transmissionCacheBytes: Int = ExecutionOptions.standard.metalTransmissionCacheBytes) {
             self.extent = extent
             self.thickness = thickness
             self.sliceThickness = sliceThickness
@@ -127,6 +133,8 @@ public struct SimulationPlan: Sendable, Equatable {
             self.configurations = configurations
             self.storedExitPlanes = storedExitPlanes
             self.batchBytes = batchBytes
+            self.distinctSlices = distinctSlices
+            self.transmissionCacheBytes = transmissionCacheBytes
         }
     }
 
@@ -146,11 +154,13 @@ public struct SimulationPlan: Sendable, Equatable {
         public let scan: Int
         /// The exit waves kept besides the last: 8 N for each further stored plane of each wave in a batch.
         public let storedExitWaves: Int
+        /// The cached transmissions: 8 N per distinct slice when the plan caches them, else 0.
+        public let transmissionCache: Int
 
         /// The sum: the predicted peak.
         public var total: Int {
             var sum = 0
-            for v in [waves, potential, propagators, scan, storedExitWaves] {
+            for v in [waves, potential, propagators, scan, storedExitWaves, transmissionCache] {
                 let (t, o) = sum.addingReportingOverflow(v)
                 if o { return .max }
                 sum = t
@@ -176,6 +186,10 @@ public struct SimulationPlan: Sendable, Equatable {
     /// FFTs: two per slice step.
     public let fftCount: Int
     public let memory: Memory
+    /// Whether the run makes each distinct slice's transmission once and keeps it (`Request.distinctSlices` fewer than
+    /// the slices and their 8 N bytes each within `Request.transmissionCacheBytes`); otherwise every step builds its
+    /// slice's transmission, as a run without repeats does (#122).
+    public let cachesTransmissions: Bool
     /// The largest single buffer: one batch of complex float32 waves, 8 N per wave, or the element kernels, 4 N each
     /// [bytes].
     public let largestBufferBytes: Int
@@ -217,6 +231,7 @@ public struct SimulationPlan: Sendable, Equatable {
         a.request == b.request && a.grid == b.grid && a.requestedSampling == b.requestedSampling
             && a.cutoffAngles == b.cutoffAngles && a.sliceThicknesses == b.sliceThicknesses && a.batchSize == b.batchSize
             && a.propagationSteps == b.propagationSteps && a.memory == b.memory
+            && a.cachesTransmissions == b.cachesTransmissions
     }
 
     /// The plan without the limits.
@@ -229,6 +244,9 @@ public struct SimulationPlan: Sendable, Equatable {
         }
         guard r.elements >= 1, r.configurations >= 1, r.storedExitPlanes >= 1, r.batchBytes >= 1 else {
             throw SimulationPlanError.invalidRequest("elements, configurations, stored exit planes and batch bytes must be at least 1")
+        }
+        guard (r.distinctSlices ?? 1) >= 1, r.transmissionCacheBytes >= 0 else {
+            throw SimulationPlanError.invalidRequest("distinct slices must be at least 1 and the cache bytes at least 0")
         }
         let waveCount: Int
         switch r.illumination {
@@ -266,14 +284,18 @@ public struct SimulationPlan: Sendable, Equatable {
         case .planeWave: scanBytes = 0
         case .probes: scanBytes = product(4, n, batch + 2)
         }
+        let distinct = min(r.distinctSlices ?? thicknesses.count, thicknesses.count)
+        let caches = MetalMultislice.cachesTransmissions(distinct: distinct, slices: thicknesses.count, points: n,
+                                                         cacheBytes: r.transmissionCacheBytes)
         let memory = Memory(waves: product(40, n, batch), potential: potentialBytes,
                             propagators: product(4, n, 2 * Set(thicknesses).count + 1), scan: scanBytes,
-                            storedExitWaves: product(8, n, r.storedExitPlanes - 1, batch))
+                            storedExitWaves: product(8, n, r.storedExitPlanes - 1, batch),
+                            transmissionCache: caches ? product(8, n, distinct) : 0)
         let steps = product(thicknesses.count, waveCount, r.configurations)
         return SimulationPlan(request: r, grid: grid, requestedSampling: sampling,
                               cutoffAngles: Antialias.cutoffAngles(on: grid, wavelength: beam.wavelength),
                               sliceThicknesses: thicknesses, batchSize: batch, propagationSteps: steps,
-                              fftCount: product(2, steps), memory: memory,
+                              fftCount: product(2, steps), memory: memory, cachesTransmissions: caches,
                               largestBufferBytes: max(product(8, n, batch), r.potential == .atoms ? product(4, n, r.elements) : 0))
     }
 

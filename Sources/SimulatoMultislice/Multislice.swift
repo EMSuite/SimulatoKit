@@ -67,7 +67,8 @@ public enum Multislice {
             return try runCPUReporting(incident, potential: potential, planes: planes, reporter: &reporter)
         case .metal:
             let engine = try MetalEngine.require()
-            let prepared = try MetalMultislice.prepare(potential, beam: incident.beam, tilt: incident.tilt, engine: engine)
+            let prepared = try MetalMultislice.prepare(potential, beam: incident.beam, tilt: incident.tilt, options: options,
+                                                       engine: engine)
             return try runMetalReporting(incident, prepared: prepared, planes: planes, options: options, reporter: &reporter)
         }
     }
@@ -88,7 +89,8 @@ public enum Multislice {
             return try runCPUReporting(incident, potential: built, planes: planes, reporter: &reporter)
         case .metal:
             let engine = try MetalEngine.require()
-            let prepared = try MetalMultislice.prepare(potential, beam: incident.beam, tilt: incident.tilt, engine: engine)
+            let prepared = try MetalMultislice.prepare(potential, beam: incident.beam, tilt: incident.tilt, options: options,
+                                                       engine: engine)
             return try runMetalReporting(incident, prepared: prepared, planes: planes, options: options, reporter: &reporter)
         }
     }
@@ -120,16 +122,25 @@ public enum Multislice {
         }
     }
 
-    /// The bandlimited transmission function of each slice, in float64 (both backends start from these). Cancellation
-    /// is checked before each slice (`CancellationError`).
+    /// The bandlimited transmission function of each slice, in float64 (both backends start from these). A slice that
+    /// `Potential.build()` found equal to an earlier one shares its transmission function, bit for bit what computing it
+    /// would give (#122). Cancellation is checked before each slice (`CancellationError`).
     public static func transmissionFunctions(_ potential: ProjectedPotential, beam: ElectronBeam) throws -> [ComplexField] {
         WorkCounter.current?.countPreparation()
         let grid = potential.grid
         let fft = try FFT2D(nx: grid.nx, ny: grid.ny)
         let aperture = Antialias.aperture(on: grid)
         let sigma = beam.interactionParameter
-        return try potential.slices.map { slice in
+        let first = potential.firstEqualSlices
+        var made: [ComplexField] = []
+        made.reserveCapacity(potential.slices.count)
+        for (j, slice) in potential.slices.enumerated() {
             try Task.checkCancellation()
+            if first[j] != j {
+                made.append(made[first[j]])
+                continue
+            }
+            WorkCounter.current?.countTransmission()
             var t = ComplexField(nx: grid.nx, ny: grid.ny)
             for i in slice.values.indices {
                 let phase = sigma * slice.values[i]
@@ -139,8 +150,9 @@ public enum Multislice {
             fft.forward(&t)
             t.multiply(byReal: aperture)
             fft.inverse(&t)
-            return t
+            made.append(t)
         }
+        return made
     }
 
     /// The Fresnel propagator over Δz, bandlimited: exp(−iπλΔz k²) · A (abTEM `_fresnel_propagator_array`, order 1).

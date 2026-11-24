@@ -87,17 +87,42 @@ public struct Potential: Sendable, Hashable {
         return out
     }
 
-    /// The projected potential of every slice, on the CPU in float64. Cancellation is checked before each slice
-    /// (`CancellationError`).
+    /// The projected potential of every slice, on the CPU in float64. A slice that repeats an earlier one
+    /// (`firstEqualSlices()`) shares its values, bit for bit what building it would give (#122). Cancellation is checked
+    /// before each slice (`CancellationError`).
     public func build() throws -> ProjectedPotential {
         let builder = try SliceBuilder(grid: grid, parameterization: parameterization)
         var slices: [PotentialSlice] = []
         slices.reserveCapacity(sliceThicknesses.count)
         // The atoms sorted into their slices once (filtering every atom for every slice was atoms x slices, #61).
-        for (dz, sliceAtoms) in zip(sliceThicknesses, atomsBySlice()) {
+        let bySlice = atomsBySlice()
+        let first = firstEqualSlices(bySlice)
+        for (j, dz) in sliceThicknesses.enumerated() {
             try Task.checkCancellation()
-            slices.append(PotentialSlice(thickness: dz, values: try builder.potential(of: sliceAtoms)))
+            let values: [Double]
+            if first[j] == j {
+                WorkCounter.current?.countSlicePotential()
+                values = try builder.potential(of: bySlice[j])
+            } else {
+                values = slices[first[j]].values
+            }
+            slices.append(PotentialSlice(thickness: dz, values: values))
         }
-        return ProjectedPotential(grid: grid, slices: slices, sliceOfAtom: sliceOfAtom)
+        return ProjectedPotential(grid: grid, slices: slices, sliceOfAtom: sliceOfAtom, firstEqualSlices: first)
+    }
+
+    /// For each slice, the first slice with the same atoms: the same atomic numbers at the same x and y, in the same
+    /// order. The infinite projection reads only those, so equal slices have equal potentials and transmission functions
+    /// bit for bit (a crystal slab repeats its slices every period; a frozen-phonon configuration repeats none).
+    package func firstEqualSlices() -> [Int] { firstEqualSlices(atomsBySlice()) }
+
+    func firstEqualSlices(_ bySlice: [[AtomicStructure.Atom]]) -> [Int] {
+        var seen: [[SIMD3<Double>]: Int] = [:]
+        return bySlice.enumerated().map { (j: Int, sliceAtoms: [AtomicStructure.Atom]) -> Int in
+            let key = sliceAtoms.map { SIMD3(Double($0.atomicNumber), $0.position.x, $0.position.y) }
+            if let k = seen[key] { return k }
+            seen[key] = j
+            return j
+        }
     }
 }
