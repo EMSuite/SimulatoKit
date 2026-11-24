@@ -8,4 +8,4 @@ source size and Poisson noise (samples too), `LineScan` (matched to a probe: end
 
 Since 0.4.0: 0.5.0 (2026-10-31) added the items above and the mixed-radix and odd-radix FFT passes (250² 2.2x, 500² 2.3x off vDSP). Details: `CHANGELOG.md`.
 
-Tests are split in two. `SimulatoKitParityTests` holds the pinned abTEM comparisons, the truth tests, Metal against CPU and the benchmarks (125 tests; fixtures live in its `Fixtures/`); the other targets hold the fast unit tests (92 tests); `SimulatoKitTestSupport` holds the helpers both use. `swift test -c release --parallel --skip SimulatoKitParityTests` runs the fast half; the plain `swift test -c release --parallel` runs all 217.
+Tests are split in two. `SimulatoKitParityTests` holds the pinned abTEM comparisons, the truth tests, Metal against CPU and the benchmarks (126 tests; fixtures live in its `Fixtures/`); the other targets hold the fast unit tests (93 tests); `SimulatoKitTestSupport` holds the helpers both use. `swift test -c release --parallel --skip SimulatoKitParityTests` runs the fast half; the plain `swift test -c release --parallel` runs all 219.

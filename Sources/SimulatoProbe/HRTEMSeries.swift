@@ -3,11 +3,13 @@
 //  Role: HRTEM images over a list of defocus values for exit waves stored at several thicknesses (abTEM
 //        `waves.apply_ctf(CTF(defocus=…)).intensity()` for each defocus, then `Images.tile`): each exit wave is
 //        Fourier-transformed once and each defocus kernel built once, and every image equals `Waves.applying(_:)` then
-//        `intensity()` with that defocus, bit for bit (#88).
+//        `intensity()` with that defocus, bit for bit (#88); on `.metal` the products, inverse transforms and
+//        intensities run on the GPU in float32 (#89).
 //
 
 import Foundation
 import SimulatoCore
+import SimulatoMultislice
 
 extension ContrastTransferFunction {
     /// The HRTEM images of `waves` (for example the exit waves of `Multislice.run(_:through:exitPlanes:)`, one per
@@ -17,9 +19,15 @@ extension ContrastTransferFunction {
     /// Each wave is transformed once and each kernel built once per grid and energy, so a series costs one inverse
     /// transform per image. Every image equals `waves[w].applying(ctf).intensity()` for this function with
     /// `aberrations.defocus = defocus[d]`, bit for bit, then `tiled(repetitionsX:repetitionsY:)`.
+    ///
+    /// On `.metal` the kernels are still computed in float64 on the CPU; the transforms, products and intensities run in
+    /// float32 on the GPU, batched by `options.metalBatchBytes`, within `MetalAccuracy.registered.intensity` × each
+    /// image's maximum of `.cpu`.
     /// - Throws: `SimulatoError.invalidAberration` for a non-finite defocus, `ImageOperationError.invalidRepetitions`
-    ///   for a tile count below 1 or an image too large.
-    public func images(of waves: [Waves], defocus: [Double], tile: (x: Int, y: Int) = (1, 1)) throws -> [[RealField]] {
+    ///   for a tile count below 1 or an image too large, and on `.metal` `SimulatoError.metalUnavailable` without a
+    ///   Metal device.
+    public func images(of waves: [Waves], defocus: [Double], tile: (x: Int, y: Int) = (1, 1), backend: Backend = .cpu,
+                       options: ExecutionOptions = .standard) throws -> [[RealField]] {
         if let bad = defocus.first(where: { !$0.isFinite }) {
             throw SimulatoError.invalidAberration("every defocus must be finite, got \(bad) Å")
         }
@@ -37,6 +45,17 @@ extension ContrastTransferFunction {
                     ctf.aberrations.defocus = d
                     return try ctf.kernel(on: wave.grid, wavelength: wave.beam.wavelength)
                 }
+            }
+            if backend == .metal {
+                let values = try Multislice.metalCTFIntensities(wave.field, kernels: kernels[key]!, grid: wave.grid,
+                                                                options: options)
+                out.append(try values.map { v in
+                    let image = RealField.unchecked(nx: wave.grid.nx, ny: wave.grid.ny, values: v,
+                                                    samplingX: wave.grid.samplingX, samplingY: wave.grid.samplingY)
+                    if tile.x == 1 && tile.y == 1 { return image }
+                    return try image.tiled(repetitionsX: tile.x, repetitionsY: tile.y)
+                })
+                continue
             }
             if plans[wave.grid] == nil { plans[wave.grid] = try FFT2D(nx: wave.grid.nx, ny: wave.grid.ny) }
             let fft = plans[wave.grid]!
