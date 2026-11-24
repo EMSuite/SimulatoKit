@@ -6,6 +6,7 @@
 
 import Foundation
 import Metal
+import MetalPerformanceShaders
 import MetalPerformanceShadersGraph
 import SimulatoCore
 

@@ -61,7 +61,7 @@ struct HRTEMSeriesUnitTests {
         let ctf = try ContrastTransferFunction(aberrations: lens, semiangleCutoff: 30, focalSpread: 20)
         let defocus = [-150.0, -40, 0, 80, 300]
         let cpu = try ctf.images(of: waves, defocus: defocus)
-        // Batches of 2 kernels: three batches per wave, the last padded.
+        // Batches of 2 kernels: three batches per wave (2, 2, 1); `.standard` pads its one batch of 5 to 8.
         let small = ExecutionOptions(metalBatchBytes: 24 * 32 * 40 * 2)
         for options in [ExecutionOptions.standard, small] {
             let metal = try ctf.images(of: waves, defocus: defocus, backend: .metal, options: options)
