@@ -95,7 +95,9 @@ extension RealField {
         let everyRing = weighting == .gaussian && !values.allSatisfy(\.isFinite)
         for k in radius.indices {
             let r = radius[k]
-            let first = everyRing ? 0 : Swift.max(0, Int(Swift.max(-1, ((r - reach) / step).rounded(.down))) - 1)
+            // Held to the rings before Int, as `last` is: a pixel far past the last ring at a tiny step would not fit an Int (#129).
+            // Past rings + 1 the pixel reaches no ring either way, so no sum changes.
+            let first = everyRing ? 0 : Swift.max(0, Int(Swift.min(Double(rings) + 1, Swift.max(-1, ((r - reach) / step).rounded(.down)))) - 1)
             let last = everyRing ? rings - 1 : Swift.min(rings - 1, Int(Swift.min(Double(rings), ((r + reach) / step).rounded(.up))) + 1)
             guard first <= last else { continue }
             for i in first...last {

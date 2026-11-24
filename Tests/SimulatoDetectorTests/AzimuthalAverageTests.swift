@@ -37,6 +37,15 @@ struct AzimuthalAverageTests {
                                       116.3659299808196, 111.20251111350319, 109.37593155122985]))
     }
 
+    /// A step far below the pattern's angles: pixels lie some 1e20 steps out, which no Int holds; they reach no ring (#129).
+    @Test func aTinyRadialSamplingDoesNotTrap() throws {
+        let p = Self.pattern(9, 8, 0.05, 0.06)
+        for weighting in [AzimuthalWeighting.step, .gaussian] {
+            let a = try p.azimuthalAverage(beam: Self.beam, maxAngle: 1e-21, radialSampling: 1e-20, weighting: weighting)
+            #expect(a.count == 1)
+        }
+    }
+
     @Test func gaussianRingsMatchAbTEM() throws {
         let p = Self.pattern(9, 8, 0.05, 0.06)
         let a = try p.azimuthalAverage(beam: Self.beam, weighting: .gaussian)
