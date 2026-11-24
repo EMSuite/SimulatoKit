@@ -80,8 +80,9 @@ let image = try exit.applying(ctf).intensity()     // the HRTEM image
 ```
 
 For a series over defocus and thickness, store the exit waves at several planes and call
-``ContrastTransferFunction/images(of:defocus:tile:)``. Each wave is transformed once, and each image equals
-`applying` then `intensity()` at its defocus:
+``ContrastTransferFunction/images(of:defocus:tile:backend:options:)``. Each wave is transformed once, and each image
+equals `applying` then `intensity()` at its defocus; `backend: .metal` runs the transforms on the GPU in float32, within
+`MetalAccuracy.registered.intensity` of `.cpu`:
 
 ```swift
 let exits = try Multislice.run(.planeWave(beam: beam, grid: potential.grid), through: potential, exitPlanes: .every(4))

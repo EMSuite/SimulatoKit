@@ -2,11 +2,13 @@
 //  HRTEMSeriesTests.swift
 //  Role: the HRTEM image series (#88) without fixtures: every image equals `Waves.applying(_:)` then `intensity()` at
 //        its defocus bit for bit, tiling repeats the image, and a non-finite defocus or a tile below 1 is refused.
+//        On `.metal` every image is within `MetalAccuracy.registered.intensity` of `.cpu` (#89), over several batches.
 //        The abTEM comparison is in SimulatoKitParityTests/HRTEMSeriesTests.
 //
 
 import Testing
 import SimulatoCore
+import SimulatoMultislice
 import SimulatoProbe
 
 @Suite("HRTEM image series")
@@ -49,5 +51,36 @@ struct HRTEMSeriesUnitTests {
         #expect(throws: SimulatoError.self) { try ctf.images(of: waves, defocus: [0, .nan]) }
         #expect(throws: SimulatoError.self) { try ctf.images(of: waves, defocus: [.infinity]) }
         #expect(throws: ImageOperationError.invalidRepetitions(0, 1)) { try ctf.images(of: waves, defocus: [0], tile: (x: 0, y: 1)) }
+    }
+
+    @Test(.enabled(if: Multislice.metalIsAvailable, "no Metal device"))
+    func onMetalEveryImageIsWithinTheRegisteredBoundOfTheCPU() throws {
+        let waves = try Self.waves()
+        var lens = Aberrations()
+        lens.C30 = 1.2e6
+        let ctf = try ContrastTransferFunction(aberrations: lens, semiangleCutoff: 30, focalSpread: 20)
+        let defocus = [-150.0, -40, 0, 80, 300]
+        let cpu = try ctf.images(of: waves, defocus: defocus)
+        // Batches of 2 kernels: three batches per wave, the last padded.
+        let small = ExecutionOptions(metalBatchBytes: 24 * 32 * 40 * 2)
+        for options in [ExecutionOptions.standard, small] {
+            let metal = try ctf.images(of: waves, defocus: defocus, backend: .metal, options: options)
+            #expect(metal.count == 2 && metal.allSatisfy { $0.count == defocus.count })
+            for w in waves.indices {
+                for d in defocus.indices {
+                    let a = cpu[w][d].values, b = metal[w][d].values
+                    let peak = a.map(abs).max() ?? 0
+                    let worst = zip(a, b).map { abs($0 - $1) }.max() ?? 0
+                    #expect(peak > 0 && worst <= MetalAccuracy.registered.intensity * peak,
+                            "wave \(w) defocus \(defocus[d]): \(worst) of \(peak)")
+                    #expect(metal[w][d].nx == cpu[w][d].nx && metal[w][d].samplingX == cpu[w][d].samplingX)
+                }
+            }
+        }
+        let tiled = try ctf.images(of: waves, defocus: [80], tile: (x: 2, y: 3), backend: .metal)
+        let one = try ctf.images(of: waves, defocus: [80], backend: .metal)
+        let repeated = try one[1][0].tiled(repetitionsX: 2, repetitionsY: 3)
+        #expect(tiled[1][0] == repeated)
+        #expect(try ctf.images(of: waves, defocus: [], backend: .metal) == [[], []])
     }
 }
