@@ -126,7 +126,10 @@ struct AzimuthalAverageTests {
 
     @Test func perPixelRingsEqualEveryRingOverEveryPixelBitForBit() throws {
         // A 64 x 48 pattern with signed values, anisotropic sampling.
-        let values = (0..<(64 * 48)).map { k in sin(Double(k) * 0.37) * Double(k % 17) - 3 }
+        let values: [Double] = (0..<(64 * 48)).map { (k: Int) -> Double in
+            let phase = sin(Double(k) * 0.37)
+            return phase * Double(k % 17) - 3
+        }
         let p = RealField.unchecked(nx: 64, ny: 48, values: values, samplingX: 0.05, samplingY: 0.061)
         for weighting in [AzimuthalWeighting.step, .gaussian] {
             for (sampling, width, maxAngle) in [(1.0, 1.0, nil), (0.7, 1.5, 30.0), (2.3, 0.4, nil), (1.0, 12.0, 40.0),
