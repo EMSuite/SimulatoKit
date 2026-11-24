@@ -153,4 +153,26 @@ struct DetectorTrapTests {
         #expect(throws: SimulatoError.self) { try ReciprocalSpaceLineProfiles(ensembleShape: [2], count: 2, values: [1], sampling: 1) }
         #expect(try RealSpaceLineProfiles(ensembleShape: [2], count: 2, values: [1, 2, 3, 4], sampling: 1).count == 2)
     }
+
+    @Test func aScanTooLargeForMemoryIsRefusedBeforeAnyAllocation() throws {
+        let (probe, potential) = try setup()
+        // 10^10 positions of a 16 x 16 pixelated pattern: about 2e13 bytes, refused before the positions are made
+        // (they alone would be 160 GB).
+        let huge = try GridScan(start: SIMD2(0, 0), end: SIMD2(4, 4), nx: 100_000, ny: 100_000)
+        #expect(throws: SimulatoError.self) {
+            try STEM.scan(probe: probe, potentials: [potential], scan: huge, detectors: [PixelatedDetector()])
+        }
+        // A shape whose product overflows is refused the same way.
+        let overflowing = BadScan(positions: [], shape: [Int.max, 2])
+        #expect(throws: SimulatoError.self) {
+            try STEMRun(probe: probe, potentials: [potential], scan: overflowing, detectors: [AnnularDetector(inner: 0, outer: 10)])
+        }
+        // The limit is exact: 6 positions x (one annular value x 8 + 16 bytes) = 144 bytes.
+        let small = try GridScan(start: SIMD2(0, 0), end: SIMD2(4, 4), nx: 3, ny: 2)
+        let annular: [any Detector] = [try AnnularDetector(inner: 0, outer: 10)]
+        try STEM.checkMemory(small, detectors: annular, probe: probe, limit: 144)
+        #expect(throws: SimulatoError.self) {
+            try STEM.checkMemory(small, detectors: annular, probe: probe, limit: 143)
+        }
+    }
 }

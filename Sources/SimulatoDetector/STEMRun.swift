@@ -40,13 +40,15 @@ public struct STEMRun: Sendable {
     public private(set) var completedPositions = 0
 
     /// Through built potentials, one per frozen-phonon configuration (one for a static structure).
-    /// - Throws: `SimulatoError.invalidScan` for no potential or a scan whose shape does not hold its positions,
+    /// - Throws: `SimulatoError.invalidScan` for no potential, a scan whose shape does not hold its positions or whose
+    ///   detector sums would not fit in half of the physical memory,
     ///   `gridMismatch` for a potential on another grid than the probe, and the detectors' refusals of the grid.
     public init(probe: Probe, potentials: [ProjectedPotential], scan: some ScanPattern, detectors: [any Detector],
                 backend: Backend = .cpu, options: ExecutionOptions = .standard) throws {
         guard !potentials.isEmpty else { throw SimulatoError.invalidScan("no potential") }
-        try STEM.checkShape(scan)
         for p in potentials where !p.grid.matches(probe.grid) { throw SimulatoError.gridMismatch }
+        try STEM.checkMemory(scan, detectors: detectors, probe: probe)
+        try STEM.checkShape(scan)
         try self.init(probe: probe, source: .built(potentials), scan: scan, detectors: detectors, backend: backend,
                       options: options)
     }
@@ -56,8 +58,9 @@ public struct STEMRun: Sendable {
     public init(probe: Probe, potentials: [Potential], scan: some ScanPattern, detectors: [any Detector],
                 backend: Backend = .cpu, options: ExecutionOptions = .standard) throws {
         guard !potentials.isEmpty else { throw SimulatoError.invalidScan("no potential") }
-        try STEM.checkShape(scan)
         for p in potentials where !p.grid.matches(probe.grid) { throw SimulatoError.gridMismatch }
+        try STEM.checkMemory(scan, detectors: detectors, probe: probe)
+        try STEM.checkShape(scan)
         try self.init(probe: probe, source: .lazy(potentials), scan: scan, detectors: detectors, backend: backend,
                       options: options)
     }
