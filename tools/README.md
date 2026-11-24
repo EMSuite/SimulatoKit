@@ -57,6 +57,7 @@ committed fixtures were written on a Mac; Linux reproduces them to float noise (
 | `pins/potential-project-tile/pins.py` | none: prints the numbers `SimulatoMultisliceTests/PotentialProjectTileTests.swift` holds inline |
 | `pins/polar/pins.py` | none: prints the numbers `SimulatoDetectorTests/PolarMeasurementTests.swift` holds inline |
 | `pins/crystal-slices/pins.py` | none: prints the numbers `SimulatoMultisliceTests/CrystalSliceThicknessTests.swift` holds inline |
+| `pins/image-crop-difference/pins.py` | none: prints the numbers `SimulatoCoreTests/ImageComparisonTests.swift` holds inline |
 | `pins/image-interpolate/pins.py` | none: prints the numbers `SimulatoCoreTests/ImageInterpolationTests.swift` holds inline |
 | `pins/image-gaussian/pins.py` | none: prints the numbers `SimulatoCoreTests/ImageGaussianFilterTests.swift` holds inline |
 | `pins/simulation-plan/pins.py` | none: prints the numbers `SimulatoMultisliceTests/SimulationPlanTests.swift` holds inline |
