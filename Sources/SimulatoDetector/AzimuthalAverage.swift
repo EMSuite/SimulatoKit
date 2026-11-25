@@ -120,3 +120,48 @@ extension RealField {
         return try ReciprocalSpaceLineProfiles(count: rings, values: out, sampling: step / (wavelength * 1e3))
     }
 }
+
+extension ScanMeasurement {
+    /// The azimuthal average of the pattern at every position of a `PixelatedDetector` scan, line or grid (abTEM
+    /// `DiffractionPatterns.azimuthal_average` on a scan's patterns, whose scan axes become the profiles' ensemble axes):
+    /// each position's pattern averaged as `RealField.azimuthalAverage(beam:maxAngle:radialSampling:weighting:width:)`
+    /// averages it, bit for bit.
+    /// - Parameters:
+    ///   - grid: the grid of the scan's probe; the patterns are sampled at its reciprocal sampling (1/Å), as
+    ///     `PixelatedDetector` crops them.
+    ///   - beam: the scan's beam (α = k λ 10³ mrad).
+    ///   - maxAngle, radialSampling, weighting, width: as `RealField.azimuthalAverage`.
+    /// - Returns: profiles with `ensembleShape` the scan's shape, one per position in scan order.
+    /// - Throws: `invalidScan` unless the measurement has two value axes no larger than the grid (a pixelated scan);
+    ///   the refusals of `RealField.azimuthalAverage`.
+    public func azimuthalAverage(grid: Grid, beam: ElectronBeam, maxAngle: Double? = nil, radialSampling: Double = 1,
+                                 weighting: AzimuthalWeighting = .step, width: Double = 1) throws
+        -> ReciprocalSpaceLineProfiles {
+        guard valueShape.count == 2, valueShape[0] >= 1, valueShape[1] >= 1,
+              valueShape[0] <= grid.nx, valueShape[1] <= grid.ny else {
+            throw SimulatoError.invalidScan("an azimuthal average needs the patterns of a pixelated scan on \(grid.nx) x \(grid.ny); this one has value shape \(valueShape)")
+        }
+        let (nx, ny) = (valueShape[0], valueShape[1])
+        let n = nx * ny, positions = values.count / n
+        func average(_ pattern: [Double]) throws -> ReciprocalSpaceLineProfiles {
+            try RealField(nx: nx, ny: ny, values: pattern, samplingX: grid.reciprocalSamplingX,
+                          samplingY: grid.reciprocalSamplingY)
+                .azimuthalAverage(beam: beam, maxAngle: maxAngle, radialSampling: radialSampling, weighting: weighting,
+                                  width: width)
+        }
+        var out: [Double] = []
+        var first: ReciprocalSpaceLineProfiles?
+        for p in 0..<positions {
+            let a = try average(Array(values[(p * n)..<((p + 1) * n)]))
+            if first == nil {
+                first = a
+                out.reserveCapacity(positions * a.count)
+            }
+            out.append(contentsOf: a.values)
+        }
+        // With no position the rings still follow from the geometry alone.
+        let rings = try first ?? average([Double](repeating: 0, count: n))
+        return try ReciprocalSpaceLineProfiles(ensembleShape: scanShape, count: rings.count, values: out,
+                                               sampling: rings.sampling)
+    }
+}
