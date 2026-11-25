@@ -113,12 +113,16 @@ extension Multislice {
     /// transmission functions and a workspace of FFT plans and propagators, on `.metal` the slices on the GPU. A scan
     /// that runs its positions in chunks prepares once and runs every chunk with `runBatch(_:prepared:options:progress:)`.
     /// On `.metal`, `options` sets the transmission cache and its renormalisation: run with the same options.
+    /// On `.cpu` a `workspace` made for the same grid (one per scan, kept across its configurations) gives its FFT
+    /// plans and propagators to the batch; without one, or for another grid, a new one is made.
     package static func prepareBatch(_ potential: ProjectedPotential, beam: ElectronBeam, tilt: SIMD2<Double>,
-                                     backend: Backend, options: ExecutionOptions = .standard) throws -> PreparedBatch {
+                                     backend: Backend, options: ExecutionOptions = .standard,
+                                     workspace: CPUWorkspace? = nil) throws -> PreparedBatch {
         switch backend {
         case .cpu:
             let transmissions = try transmissionFunctions(potential, beam: beam)
-            return PreparedBatch(storage: .cpu(potential, transmissions, CPUWorkspace(grid: potential.grid)),
+            let workspace = workspace?.reused(for: potential.grid) ?? CPUWorkspace(grid: potential.grid)
+            return PreparedBatch(storage: .cpu(potential, transmissions, workspace),
                                  grid: potential.grid, energy: beam.energy, tilt: tilt)
         case .metal:
             let engine = try MetalEngine.require()
@@ -129,12 +133,13 @@ extension Multislice {
 
     /// The same for a `Potential`: on `.cpu` built here (`build()`), on `.metal` built slice by slice on the GPU.
     package static func prepareBatch(_ potential: Potential, beam: ElectronBeam, tilt: SIMD2<Double>,
-                                     backend: Backend, options: ExecutionOptions = .standard) throws -> PreparedBatch {
+                                     backend: Backend, options: ExecutionOptions = .standard,
+                                     workspace: CPUWorkspace? = nil) throws -> PreparedBatch {
         switch backend {
         case .cpu:
             let built = try potential.build()
             try Task.checkCancellation()
-            return try prepareBatch(built, beam: beam, tilt: tilt, backend: .cpu)
+            return try prepareBatch(built, beam: beam, tilt: tilt, backend: .cpu, workspace: workspace)
         case .metal:
             let engine = try MetalEngine.require()
             let prepared = try MetalMultislice.prepare(potential, beam: beam, tilt: tilt, options: options, engine: engine)

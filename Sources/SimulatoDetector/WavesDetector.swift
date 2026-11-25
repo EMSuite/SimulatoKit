@@ -134,7 +134,8 @@ extension STEM {
         try checkMemory(probe: probe, scan: scan, detector: detector, limit: memoryLimit)
         let prepared = try Multislice.prepareBatch(potentials[0], beam: probe.beam, tilt: probe.tilt, backend: backend,
                                                          options: options)
-        return try collect(probe: probe, scan: scan, detector: detector, options: options) { incidents in
+        return try collect(probe: probe, scan: scan, detector: detector, options: options,
+                           builder: ProbeBuilder(probe)) { incidents in
             try Multislice.runBatch(incidents, prepared: prepared, options: options)
         }
     }
@@ -148,7 +149,8 @@ extension STEM {
         try checkMemory(probe: probe, scan: scan, detector: detector, limit: memoryLimit)
         let prepared = try Multislice.prepareBatch(potentials[0], beam: probe.beam, tilt: probe.tilt, backend: backend,
                                                          options: options)
-        return try collect(probe: probe, scan: scan, detector: detector, options: options) { incidents in
+        return try collect(probe: probe, scan: scan, detector: detector, options: options,
+                           builder: ProbeBuilder(probe)) { incidents in
             try Multislice.runBatch(incidents, prepared: prepared, options: options)
         }
     }
@@ -167,10 +169,13 @@ extension STEM {
         guard !potentials.isEmpty else { throw SimulatoError.invalidScan("no potential") }
         for p in potentials where !p.grid.matches(probe.grid) { throw SimulatoError.gridMismatch }
         try checkMemory(probe: probe, scan: scan, detector: detector, limit: memoryLimit, configurations: potentials.count)
+        // The probe's spectrum, the FFT plans and the propagators once for every configuration (#61).
+        let builder = try ProbeBuilder(probe)
+        let workspace = CPUWorkspace(grid: potentials[0].grid)
         return try potentials.map { potential in
             let prepared = try Multislice.prepareBatch(potential, beam: probe.beam, tilt: probe.tilt, backend: backend,
-                                                         options: options)
-            return try collect(probe: probe, scan: scan, detector: detector, options: options) { incidents in
+                                                         options: options, workspace: workspace)
+            return try collect(probe: probe, scan: scan, detector: detector, options: options, builder: builder) { incidents in
                 try Multislice.runBatch(incidents, prepared: prepared, options: options)
             }
         }
@@ -184,10 +189,13 @@ extension STEM {
         guard !potentials.isEmpty else { throw SimulatoError.invalidScan("no potential") }
         for p in potentials where !p.grid.matches(probe.grid) { throw SimulatoError.gridMismatch }
         try checkMemory(probe: probe, scan: scan, detector: detector, limit: memoryLimit, configurations: potentials.count)
+        // The probe's spectrum, the FFT plans and the propagators once for every configuration (#61).
+        let builder = try ProbeBuilder(probe)
+        let workspace = CPUWorkspace(grid: potentials[0].grid)
         return try potentials.map { potential in
             let prepared = try Multislice.prepareBatch(potential, beam: probe.beam, tilt: probe.tilt, backend: backend,
-                                                         options: options)
-            return try collect(probe: probe, scan: scan, detector: detector, options: options) { incidents in
+                                                         options: options, workspace: workspace)
+            return try collect(probe: probe, scan: scan, detector: detector, options: options, builder: builder) { incidents in
                 try Multislice.runBatch(incidents, prepared: prepared, options: options)
             }
         }
@@ -209,7 +217,7 @@ extension STEM {
     }
 
     private static func collect(probe: Probe, scan: GridScan, detector: WavesDetector, options: ExecutionOptions,
-                                run: ([Waves]) throws -> [Waves]) throws -> ScanWaves {
+                                builder: ProbeBuilder, run: ([Waves]) throws -> [Waves]) throws -> ScanWaves {
         let positions = scan.positions
         let r = detector.rows ?? probe.grid.nx, c = detector.columns ?? probe.grid.ny
         let need = WavesDetector.requiredBytes(positions: positions.count, rows: r, columns: c)
@@ -223,7 +231,6 @@ extension STEM {
         // Chunks as the measurement scan: the incident and exit waves of one chunk only, besides the result; `run` goes
         // through a potential prepared once for the scan.
         let chunk = max(1, options.scanChunkBytes / (probe.grid.count * 16 * 2))
-        let builder = try ProbeBuilder(probe)
         for first in stride(from: 0, to: positions.count, by: chunk) {
             let incidents = try positions[first..<min(first + chunk, positions.count)].map { try builder.build(at: $0) }
             for exit in try run(incidents) {

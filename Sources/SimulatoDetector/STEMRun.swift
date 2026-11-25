@@ -117,12 +117,23 @@ public struct STEMRun: Sendable {
     ///   simulation's errors (after one of those the run's sums may hold part of a round: start a new run).
     public mutating func run(progress: SimulationProgressHandler? = nil) throws -> [ScanMeasurement] {
         var reporter = SimulationProgressReporter(progress, interval: options.progressInterval)
+        // What does not depend on the configuration is made once for all of them (#61): on `.cpu` the probe's spectrum
+        // (`ProbeBuilder`), the FFT plans and the propagators; on `.metal` the probe's centred spectrum.
+        var builder: ProbeBuilder?
+        var workspace: CPUWorkspace?
+        var spectrum: ComplexField?
         while completedConfigurations < configurationCount {
             reporter.report(snapshot(.preparing, slicesDone: 0, slices: 1, fractionKnown: false))
             try Task.checkCancellation()
             switch backend {
-            case .cpu: try cpuConfiguration(&reporter)
-            case .metal: try metalConfiguration(&reporter)
+            case .cpu:
+                let made = try builder ?? ProbeBuilder(probe)
+                builder = made
+                try cpuConfiguration(&reporter, builder: made, workspace: &workspace)
+            case .metal:
+                let made = spectrum ?? probe.centredSpectrum()
+                spectrum = made
+                try metalConfiguration(&reporter, spectrum: made)
             }
             completedConfigurations += 1
             completedPositions = 0
@@ -143,7 +154,10 @@ public struct STEMRun: Sendable {
                                   configurationCount: k > 1 ? k : nil)
     }
 
-    mutating func cpuConfiguration(_ reporter: inout SimulationProgressReporter) throws {
+    /// One configuration on the CPU. `workspace` is the run's (made here when none is, or when this configuration's
+    /// grid differs from the one it was made for, so reuse never changes a bit).
+    mutating func cpuConfiguration(_ reporter: inout SimulationProgressReporter, builder: ProbeBuilder,
+                                   workspace kept: inout CPUWorkspace?) throws {
         let potential: ProjectedPotential
         switch source {
         case .built(let p): potential = p[completedConfigurations]
@@ -154,10 +168,10 @@ public struct STEMRun: Sendable {
         // Positions in chunks of `options.scanChunkBytes`, so the waves of one chunk only are held (13 MB per position
         // at 480²).
         let chunk = max(1, options.scanChunkBytes / (probe.grid.count * 16 * 2))
-        // One workspace (FFT plans and propagators) for every chunk of the configuration.
-        let workspace = CPUWorkspace(grid: potential.grid)
-        let probe = probe, positions = positions, detectors = detectors, counts = counts
-        let builder = try ProbeBuilder(probe)
+        // One workspace (FFT plans and propagators) for every chunk and every configuration of the run.
+        let workspace = kept?.reused(for: potential.grid) ?? CPUWorkspace(grid: potential.grid)
+        kept = workspace
+        let positions = positions, detectors = detectors, counts = counts
         var sums: [[Double]] = []
         swap(&sums, &self.sums)
         defer { swap(&sums, &self.sums) }
@@ -177,12 +191,12 @@ public struct STEMRun: Sendable {
         }
     }
 
-    mutating func metalConfiguration(_ reporter: inout SimulationProgressReporter) throws {
+    /// One configuration on Metal, from the run's centred probe `spectrum`.
+    mutating func metalConfiguration(_ reporter: inout SimulationProgressReporter, spectrum: ComplexField) throws {
         let start = completedPositions
         let remaining = positions.count - start
         guard remaining > 0 else { return }
         let probe = probe, positions = positions, detectors = detectors, counts = counts, options = options
-        let spectrum = probe.centredSpectrum()
         var sums: [[Double]] = []
         swap(&sums, &self.sums)
         defer { swap(&sums, &self.sums) }

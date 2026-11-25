@@ -249,6 +249,10 @@ above.
   the device's largest buffer or the budget (half of Metal's recommended working set, at most a quarter of the memory) is
   refused with a coarser sampling that fits.
 - The CPU batch on up to `ExecutionOptions.maximumCPUThreads` (8 by default) threads, equal to sequential runs (exact today).
+- A scan does its position-independent work once (#61): each potential is prepared once for all its chunks of positions,
+  the probe's aperture and aberration phase once for all positions, and with frozen phonons the probe's spectrum, the CPU
+  FFT plans and the propagators once for every configuration (`STEM.scan`, `STEMRun`, `STEM.scanFrozenPhonons`). The
+  numbers do not change (bit for bit on `.cpu`, tested by counting the work and comparing the values).
 - Slices that repeat are built once (#122). Two slices with the same atoms (atomic number, x and y, in order; the
   infinite projection reads nothing else) share one potential and one transmission function, bit for bit on `.cpu`; a
   `ProjectedPotential` carries that grouping from `Potential.build()` (slices made elsewhere are all taken as distinct,
