@@ -30,12 +30,18 @@ package final class CPUWorkspace: @unchecked Sendable {
         let thickness: Double
     }
 
-    let grid: Grid
+    package let grid: Grid
     private var plans: [FFT2D] = []
     private var propagators: [PropagatorKey: ComplexField] = [:]
 
     package init(grid: Grid) {
         self.grid = grid
+    }
+
+    /// This workspace when it was made for `grid` exactly (its plans and propagators then give bit for bit what new
+    /// ones would), else a new one for `grid`: a scan of several configurations makes its plans once (#61).
+    package func reused(for grid: Grid) -> CPUWorkspace {
+        self.grid == grid ? self : CPUWorkspace(grid: grid)
     }
 
     /// Makes sure `count` plans exist (on the calling thread, before a round).

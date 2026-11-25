@@ -78,6 +78,7 @@ public struct Probe: Sendable, Hashable {
     /// Ψ₀ = aperture · exp(−iχ) / ‖·‖ in reciprocal space, unshifted: `build(at:)`
     /// without the shift ramp, whose modulus is 1, so its norm does not depend on the position.
     package func centredSpectrum() -> ComplexField {
+        WorkCounter.current?.countProbeSpectrum()
         let lambda = beam.wavelength
         let kx = grid.frequenciesX, ky = grid.frequenciesY
         let ap = aperture.values(on: grid, wavelength: lambda)

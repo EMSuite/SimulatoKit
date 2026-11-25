@@ -3,7 +3,8 @@
 //  Role: scans run in chunks of positions prepare each potential once (#61): a WavesDetector scan builds its
 //        transmission functions once, not once per chunk, a CPU STEM run makes its FFT plans once for every chunk, and
 //        the numbers do not change (bit for bit against one chunk). The probe's aperture and aberration phase are
-//        computed once per scan, not once per position. A prepared batch refuses another energy or grid.
+//        computed once per scan, not once per position, and with frozen phonons once for every configuration, as are the
+//        FFT plans and propagators. A prepared batch refuses another energy or grid.
 //
 
 import Testing
@@ -58,6 +59,42 @@ struct PreparedOnceTests {
         }
         #expect(scans.count == 2)
         #expect(counter.preparationCount == 2)
+        // One probe spectrum and one FFT plan for both configurations (each was two).
+        #expect(counter.probeSpectrumCount == 1)
+        #expect(counter.fftPlanCount == 1)
+        let single = try STEM.scan(probe: probe, potentials: [potential], scan: scan, detector: WavesDetector(),
+                                   options: Self.onePerChunk)
+        for waves in scans {
+            #expect(waves.real == single.real && waves.imaginary == single.imaginary)
+        }
+    }
+
+    @Test func aFrozenPhononRunMakesItsProbeAndPlansOnceForEveryConfiguration() throws {
+        let (probe, potential, scan) = try Self.setup()
+        let detectors: [any Detector] = [try AnnularDetector(inner: 0, outer: 20), PixelatedDetector()]
+        let (twice, counter) = try Self.counting {
+            try STEM.scan(probe: probe, potentials: [potential, potential], scan: scan, detectors: detectors,
+                          options: Self.onePerChunk)
+        }
+        // Two configurations: two preparations, but one probe spectrum and one FFT plan (each was two).
+        #expect(counter.preparationCount == 2)
+        #expect(counter.probeSpectrumCount == 1)
+        #expect(counter.fftPlanCount == 1)
+        // Two equal configurations average to one, bit for bit ((a + a) / 2 = a).
+        let once = try STEM.scan(probe: probe, potentials: [potential], scan: scan, detectors: detectors,
+                                 options: Self.onePerChunk)
+        #expect(twice.map(\.values) == once.map(\.values))
+    }
+
+    @Test(.enabled(if: Multislice.metalIsAvailable, "no Metal device"))
+    func aFrozenPhononMetalRunMakesItsProbeSpectrumOnce() throws {
+        let (probe, potential, scan) = try Self.setup()
+        let (scans, counter) = try Self.counting {
+            try STEM.scan(probe: probe, potentials: [potential, potential], scan: scan,
+                          detectors: [try AnnularDetector(inner: 0, outer: 20)], backend: .metal)
+        }
+        #expect(scans.count == 1)
+        #expect(counter.probeSpectrumCount == 1)
     }
 
     @Test func aCPURunMakesItsFFTPlansOnceForEveryChunk() throws {
