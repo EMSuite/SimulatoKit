@@ -48,6 +48,7 @@ committed fixtures were written on a Mac; Linux reproduces them to float noise (
 | `pins/icom/pins.py` | `icom-pins.json`, `icom-arrays.bin` |
 | `pins/slab/pins.py` | `slab-pins.json`, `slab-arrays.bin` |
 | `pins/beam-intensities/pins.py` | `beam-intensities-pins.json` (imports `slab`'s rules) |
+| `pins/beam-matrix/pins.py` | `beam-matrix-pins.json`: 74 cases, eleven crystals by zone and 80, 200, 300 kV (imports `beam-intensities`) |
 | `pins/kirkland/pins.py` | `kirkland-pins.json`, `kirkland-arrays.bin`, `Sources/SimulatoMultislice/KirklandTable.swift` (reads `slab-pins.json`, so runs after `slab`) |
 | `pins/thermal-sites/pins.py` | `thermal-sites-pins.json`, `thermal-sites-arrays.bin` (imports `potential-multislice`) |
 | `pins/flexible-annular/pins.py` | `flexible-annular-pins.json`, `flexible-annular-arrays.bin` (imports `potential-multislice`, `stem-detectors`, `beam-intensities`) |
