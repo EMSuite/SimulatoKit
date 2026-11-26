@@ -6,6 +6,18 @@ what a consumer must change under **Migration**. Every version below is a git ta
 release-please writes each entry from the merged pull requests' titles, and a breaking change's Migration is its
 `BREAKING CHANGE:` note.
 
+## [0.8.0](https://github.com/EMSuite/SimulatoKit/compare/0.7.1...0.8.0) (2026-11-25)
+
+
+### Features
+
+* the azimuthal average of every pattern of a pixelated scan ([#143](https://github.com/EMSuite/SimulatoKit/issues/143)) ([10f8839](https://github.com/EMSuite/SimulatoKit/commit/10f8839e110f65d9614247a089de8eb5c247b56f))
+
+
+### Performance Improvements
+
+* frozen-phonon scans make the probe, FFT plans and propagators once for every configuration ([#142](https://github.com/EMSuite/SimulatoKit/issues/142)) ([26b8fbc](https://github.com/EMSuite/SimulatoKit/commit/26b8fbc1cf1208897a0e91985a3219af95885777))
+
 ## [0.7.1](https://github.com/EMSuite/SimulatoKit/compare/0.7.0...0.7.1) (2026-11-24)
 
 
