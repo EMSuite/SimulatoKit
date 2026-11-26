@@ -4,7 +4,9 @@
 //        every stored thickness (abTEM 1.0.10 `DiffractionPatterns.index_diffraction_spots` with no radius: the value of
 //        the one pixel a reflection falls in, not a disc). The pixel of a reflection comes from the slab's integer
 //        supercell matrix V, so the indices are exact: the crystal's hkl sits at the box frequency V hkl, and a beam of
-//        the zero-order Laue zone has (V hkl)_z = 0.
+//        the zero-order Laue zone has (V hkl)_z = 0. Only reflections of the lattice are beams: an hkl that a centring
+//        translation of the cell forbids (Si's F: mixed parity) is left out, as abTEM's `centering` leaves it out, because
+//        its pixel holds a higher-order Laue zone reflection seen in projection (SimulatoKit#145).
 //
 
 import SimulatoCore
@@ -34,7 +36,8 @@ public struct BeamIntensities: Sendable, Hashable {
 
     /// The beams of the zero-order Laue zone that the exit waves' cutoff pattern holds (abTEM's
     /// `diffraction_patterns(max_angle="cutoff")`, |g| at most its largest frequency, abTEM's default `g_max`), read in
-    /// each wave of `exitWaves`.
+    /// each wave of `exitWaves`. Only reflections of the crystal's lattice are beams (``isReflection(_:in:)``): a centred
+    /// cell's forbidden hkl is left out, as abTEM 1.0.10's `index_diffraction_spots` with the lattice's `centering`.
     ///
     /// `exitWaves` are the waves of a run through the slab's slices (`Potential(structure: slab.structure, ...,
     /// sliceThicknesses: slab.sliceThicknesses)`) with `exitPlanes`, in plane order, as `Multislice.run` returns them.
@@ -102,6 +105,101 @@ public struct BeamIntensities: Sendable, Hashable {
         return intensities.map { $0[b] }
     }
 
+    // MARK: The reflections of the lattice
+
+    /// Whether `hkl` is a reflection of the slab's crystal lattice: h·t is a whole number for every translation t of the
+    /// cell that maps its atoms onto themselves (``latticeTranslations(of:)``). A primitive cell has none, so every hkl is one;
+    /// an F-centred cell (Si, Al, Au) forbids mixed parity, an I-centred one (Fe) an odd h + k + l, whatever the letters, as
+    /// abTEM's `get_reflection_condition` for the lattice's `centering`. A glide or screw does not count: Si 002 is a
+    /// reflection, zero kinematically, dynamically not.
+    /// Reads every atom of the unit; for many hkl, take ``latticeTranslations(of:)`` once and
+    /// ``isReflection(_:translations:)``.
+    public static func isReflection(_ hkl: SIMD3<Int>, in slab: Slab) -> Bool {
+        isReflection(hkl, translations: latticeTranslations(of: slab.unit))
+    }
+
+    /// The translations of the crystal's cell, in the cell's fractional coordinates within [0, 1), that map every atom of the
+    /// unit onto an atom of the same element and occupancy, other than the lattice vectors: the centring of the cell (F:
+    /// (0, ½, ½), (½, 0, ½), (½, ½, 0)). Empty for a primitive cell or a model with no repeat.
+    ///
+    /// The unit's atoms, in the box's fractional coordinates f, sit in the cell at f V (r = f B and B = V C, B the box and C
+    /// the cell, both as rows), taken modulo 1; the candidates move one atom of the rarest element onto another of it.
+    public static func latticeTranslations(of unit: OrthogonalUnit) -> [SIMD3<Double>] {
+        let box = unit.structure.box
+        let v = unit.supercell
+        let steps = 10_000   // positions to 1e-4 of a cell edge: far below an atomic spacing, far above rounding
+        func cellFraction(_ p: SIMD3<Double>) -> SIMD3<Double> {
+            let f = SIMD3(p.x / box.x, p.y / box.y, p.z / box.z)
+            var c = SIMD3<Double>(0, 0, 0)
+            for k in 0..<3 {
+                c[k] = f.x * Double(v[0][k]) + f.y * Double(v[1][k]) + f.z * Double(v[2][k])
+            }
+            return c
+        }
+        func wrap(_ n: Int) -> Int {
+            let w = n % steps
+            return w < 0 ? w + steps : w
+        }
+        func step(_ x: Double) -> Int { wrap(Int((x * Double(steps)).rounded())) }
+        struct Site: Hashable {
+            let atomicNumber: Int
+            let occupancy: Int
+            let cell: SIMD3<Int>
+        }
+        func site(_ z: Int, _ occupancy: Double, _ c: SIMD3<Double>) -> Site {
+            Site(atomicNumber: z, occupancy: Int((occupancy * 1e6).rounded()), cell: SIMD3(step(c.x), step(c.y), step(c.z)))
+        }
+        var sites = Set<Site>()
+        var positions: [(z: Int, occupancy: Double, cell: SIMD3<Double>)] = []
+        for atom in unit.structure.atoms {
+            let c = cellFraction(atom.position)
+            let wrapped = c - c.rounded(.down)
+            if sites.insert(site(atom.atomicNumber, atom.occupancy, wrapped)).inserted {
+                positions.append((z: atom.atomicNumber, occupancy: atom.occupancy, cell: wrapped))
+            }
+        }
+        guard positions.count > 1 else { return [] }
+        var counts: [Int: Int] = [:]
+        for p in positions { counts[p.z, default: 0] += 1 }
+        let rarest = counts.min { $0.value != $1.value ? $0.value < $1.value : $0.key < $1.key }!.key
+        let anchors = positions.filter { $0.z == rarest }
+        let origin = anchors[0].cell
+        var found: [SIMD3<Double>] = []
+        for other in anchors.dropFirst() {
+            var t = other.cell - origin
+            t -= t.rounded(.down)
+            // A moved atom's stored bin is its rounding; a coordinate near a half step can round either way by an ulp, so the
+            // lookup tries both neighbouring bins on each axis (floor and floor + 1 of x · steps).
+            func present(_ z: Int, _ occupancy: Double, _ c: SIMD3<Double>) -> Bool {
+                let o = Int((occupancy * 1e6).rounded())
+                let lo = SIMD3(Int((c.x * Double(steps)).rounded(.down)), Int((c.y * Double(steps)).rounded(.down)),
+                               Int((c.z * Double(steps)).rounded(.down)))
+                for dx in 0...1 {
+                    for dy in 0...1 {
+                        for dz in 0...1 {
+                            let key = SIMD3(wrap(lo.x + dx), wrap(lo.y + dy), wrap(lo.z + dz))
+                            if sites.contains(Site(atomicNumber: z, occupancy: o, cell: key)) { return true }
+                        }
+                    }
+                }
+                return false
+            }
+            guard positions.allSatisfy({ present($0.z, $0.occupancy, $0.cell + t) }) else { continue }
+            found.append(t)
+        }
+        return found
+    }
+
+    /// Whether h·t is a whole number (within 1e−3, far below the 1/6 or more a centring's phase moves) for every translation
+    /// t of ``latticeTranslations(of:)``: the form to use for many hkl, as ``isReflection(_:in:)`` reads every atom of the
+    /// unit on each call.
+    public static func isReflection(_ hkl: SIMD3<Int>, translations: [SIMD3<Double>]) -> Bool {
+        translations.allSatisfy { t in
+            let phase = Double(hkl.x) * t.x + Double(hkl.y) * t.y + Double(hkl.z) * t.z
+            return abs(phase - phase.rounded()) <= 1e-3
+        }
+    }
+
     // MARK: The integer map
 
     /// The signed frequency index on the slab's grid of the crystal reflection `hkl`: (r_x (V hkl)_x, r_y (V hkl)_y), r the
@@ -131,8 +229,10 @@ public struct BeamIntensities: Sendable, Hashable {
         return h
     }
 
-    /// The zero-order beams of the cutoff pattern on `grid`, by |g| (rounded to 1e−9 1/Å) and then by hkl.
+    /// The zero-order beams of the cutoff pattern on `grid` that are reflections of the lattice, by |g| (rounded to 1e−9
+    /// 1/Å) and then by hkl.
     static func beams(of slab: Slab, on grid: Grid) -> [Beam] {
+        let translations = latticeTranslations(of: slab.unit)
         let size = Antialias.cutoffPatternSize(on: grid)
         let lx = grid.extentX, ly = grid.extentY
         let gMax = max(Double((size.nx - 1) / 2) / lx, Double((size.ny - 1) / 2) / ly)
@@ -142,7 +242,8 @@ public struct BeamIntensities: Sendable, Hashable {
                 let gx = Double(px) / lx, gy = Double(py) / ly
                 let g = (gx * gx + gy * gy).squareRoot()
                 guard g <= gMax * (1 + 1e-12) else { continue }
-                guard let reflection = Self.hkl(atFrequencyIndex: SIMD2(px, py), in: slab) else { continue }
+                guard let reflection = Self.hkl(atFrequencyIndex: SIMD2(px, py), in: slab),
+                      Self.isReflection(reflection, translations: translations) else { continue }
                 let key = (g * 1e9).rounded(.toNearestOrEven)
                 let beam = Beam(hkl: reflection, index: SIMD2(px, py), spatialFrequency: SIMD2(gx, gy))
                 found.append((key: key, beam: beam))

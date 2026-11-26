@@ -3,19 +3,26 @@ crystal's Miller indices, at every stored thickness (abTEM 1.0.10 `DiffractionPa
 
 Writes Tests/SimulatoKitParityTests/Fixtures/beam-intensities-pins.json:
 
-* cases: Si [110], Si [111] and Mg [0001] at 200 kV, the kit's slab (the orthogonal unit of `tools/pins/slab/pins.py`,
+* cases: Si [110], Si [111], Mg [0001] and Si [001] at 200 kV, the kit's slab (the orthogonal unit of `tools/pins/slab/pins.py`,
   one unit laterally, slices of at most 1 A that repeat with the period, the kit's z shift and mirror to depth), stored after five whole
   numbers of periods from about 2 to 100 nm. For each case: the grid, the periods stored, the exit planes, and for every
   zero-order Laue zone beam inside the antialias aperture its crystal hkl and its intensity at each stored thickness.
 
 The reference is abTEM's own indexing: `PlaneWave.multislice` (infinite projection, float64) with the stored exit planes,
 `diffraction_patterns()` (cropped at the antialias cutoff, the zero frequency centred) and `index_diffraction_spots` with
-the crystal cell as it sits in the box (the strained cell inv(V) diag(box), V the integer supercell matrix), no
+the crystal cell as it sits in the box (the strained cell inv(V) diag(box), V the integer supercell matrix), the lattice's
+centring (`centering`: F for Si, P for Mg; abTEM then leaves out every hkl its `get_reflection_condition` forbids), no
 orientation matrix and no radius: abTEM 1.0.10 then reads the single pixel the reflection falls in (`np.digitize` on the
 pixel edges), not a disc, and zeroes a spot whose pixel a reflection of smaller excitation error already holds. In that
 cell's reciprocal lattice the reflection hkl falls exactly on the pixel (V hkl)_xy of the box, which is the kit's integer
-map. The generator checks that abTEM gives every pixel the kit's rule selects (V hkl has z = 0, inside the cropped pattern,
-|g| at most its largest frequency, abTEM's default g_max) to the same hkl, and that abTEM's value is that pixel's. abTEM's
+map. The generator checks that abTEM gives every pixel the kit's rule selects (V hkl has z = 0, a reflection of the
+centred lattice, inside the cropped pattern, |g| at most its largest frequency, abTEM's default g_max) to the same hkl, and
+that abTEM's value is that pixel's. Si [001] is the case of SimulatoKit#145: its box is the conventional cubic cell, so
+half its in-zone integer hkl (1 0 0, 1 2 0, and 1 21 0, where the first-order Laue zone ring's 1 21 1 lands at 3.87 1/A)
+are no reflection of the F lattice, and neither abTEM nor the kit lists them. It is sampled at 0.1 A, its pattern
+reaching 3.50 1/A: inside the midpoint (3.83 1/A at 200 kV, lambda g^2 / 2 = 1 / c) past which abTEM gives an allowed
+pixel to the second-order Laue zone reflection of smaller excitation error and names it so, while the kit names it by its
+zero-order hkl. abTEM's
 default sg_max (`estimate_necessary_excitation_error`) leaves zero-order beams beyond about sqrt(2 g_max) unindexed, so
 the generator passes lambda g_max^2 / 2, the largest zero-order excitation error on the pattern.
 
@@ -57,7 +64,9 @@ SAMPLING = 0.2  # A, about: each side gets an even number of pixels
 TARGET_NM = (2, 10, 25, 50, 100)
 # Si [110] at 0 to 8 periods for the truth test (the forbidden 002 beam grows from zero).
 TRUTH_PERIODS = (1, 2, 3, 4, 6, 8)
-CASES = [("Si", (1, 1, 0)), ("Si", (1, 1, 1)), ("Mg", (0, 0, 1))]
+# (structure, zone, sampling in A); Si [001] at 0.1 A reaches as close to the Laue zone rings as the names agree.
+CASES = [("Si", (1, 1, 0), SAMPLING), ("Si", (1, 1, 1), SAMPLING), ("Mg", (0, 0, 1), SAMPLING), ("Si", (0, 0, 1), 0.1)]
+CENTERING = {"Si": "F", "Mg": "P"}
 
 
 def unit_of(atoms, uvw):
@@ -82,9 +91,11 @@ def slab_atoms(u, periods):
     return ase.Atoms(numbers=numbers, positions=positions, cell=box, pbc=True), k, h
 
 
-def kit_beams(V, box, gpts, crop):
-    """The kit's rule: every hkl with (V hkl)_z = 0 on a pixel of the cropped pattern, |g| at most the pattern's largest
-    frequency (abTEM's default g_max, the larger of the two axes' (n - 1) / 2 / L)."""
+def kit_beams(V, box, gpts, crop, centering):
+    """The kit's rule: every hkl with (V hkl)_z = 0 that the centred lattice reflects (abTEM's `get_reflection_condition`)
+    on a pixel of the cropped pattern, |g| at most the pattern's largest frequency (abTEM's default g_max, the larger of the
+    two axes' (n - 1) / 2 / L)."""
+    from abtem.bloch.utils import get_reflection_condition
     g_max = max((crop[0] - 1) // 2 / box[0], (crop[1] - 1) // 2 / box[1])
     Vi = np.linalg.inv(np.array(V, dtype=float))
     beams = []
@@ -99,19 +110,21 @@ def kit_beams(V, box, gpts, crop):
                 continue
             r = r.astype(int)
             assert (np.array(V) @ r).tolist() == [px, py, 0]
+            if not get_reflection_condition(r[None, :], centering)[0]:
+                continue
             beams.append((g, tuple(int(v) for v in r), px, py))
     beams.sort(key=lambda b: (round(b[0], 9), b[1]))
     return beams
 
 
-def run_case(atoms0, uvw, periods_list):
+def run_case(atoms0, uvw, periods_list, sampling, centering):
     n, u = unit_of(atoms0, uvw)
     V = u["supercell"]
     period = u["box"][2]
     periods = max(periods_list)
     atoms, k, h = slab_atoms(u, periods)
     box = atoms.cell.lengths()
-    gpts = tuple(2 * math.ceil(L / SAMPLING / 2) for L in box[:2])
+    gpts = tuple(2 * math.ceil(L / sampling / 2) for L in box[:2])
     planes = tuple(p * k - 1 for p in periods_list)
     pot = abtem.Potential(atoms, gpts=gpts, slice_thickness=[h] * (k * periods), projection="infinite",
                           exit_planes=planes)
@@ -123,7 +136,7 @@ def run_case(atoms0, uvw, periods_list):
     # largest zero-order excitation error on the pattern, lambda g_max^2 / 2, keeps them all.
     g_max = max(patterns.max_frequency)
     sg_max = 0.5 * abtem.core.energy.energy2wavelength(ENERGY) * g_max ** 2 * (1 + 1e-6)
-    indexed = patterns.index_diffraction_spots(cell=cell, sg_max=sg_max)
+    indexed = patterns.index_diffraction_spots(cell=cell, sg_max=sg_max, centering=centering)
     abtem_hkl = np.asarray(indexed.miller_indices, dtype=int)
     abtem_values = np.asarray(indexed.array)  # (planes, spots), zero where the overlap rule gave the pixel to another
     # abTEM's own pixel of each indexed reflection (`_find_projected_pixel_index`) and its winner per pixel (the
@@ -137,7 +150,7 @@ def run_case(atoms0, uvw, periods_list):
     for i in np.flatnonzero(winner):
         label[(int(nm[i, 0]) - crop[0] // 2, int(nm[i, 1]) - crop[1] // 2)] = i
 
-    beams = kit_beams(V, box, gpts, crop)
+    beams = kit_beams(V, box, gpts, crop, centering)
     intensities = np.zeros((len(planes), len(beams)))
     labels = []
     full = np.abs(np.fft.fft2(np.asarray(waves.array) / (gpts[0] * gpts[1]))) ** 2
@@ -175,12 +188,12 @@ def main():
                                             for z, f in zip(s[name].numbers, s[name].get_scaled_positions())]}
                            for name in ("Si", "Mg")},
             "cases": []}
-    for name, uvw in CASES:
+    for name, uvw, sampling in CASES:
         _, u = unit_of(s[name], uvw)
         period = u["box"][2]
         periods_list = sorted({max(1, round(t * 10 / period)) for t in TARGET_NM})
         assert len(periods_list) == 5
-        u, V, gpts, k, planes, thick, beams, I, labels = run_case(s[name], uvw, periods_list)
+        u, V, gpts, k, planes, thick, beams, I, labels = run_case(s[name], uvw, periods_list, sampling, CENTERING[name])
         pins["cases"].append({"structure": name, "zone": list(uvw), "supercell": V, "periods": periods_list,
                               "slices_per_period": k, "gpts": list(gpts), "exit_planes": list(planes),
                               "thicknesses": thick, "hkl": [list(b[1]) for b in beams],
@@ -192,7 +205,7 @@ def main():
 
     # The truth: Si [110] 002 from zero, thin.
     _, u = unit_of(s["Si"], (1, 1, 0))
-    *_, beams, I, _ = run_case(s["Si"], (1, 1, 0), list(TRUTH_PERIODS))
+    *_, beams, I, _ = run_case(s["Si"], (1, 1, 0), list(TRUTH_PERIODS), SAMPLING, CENTERING["Si"])
     j = [b[1] for b in beams].index((0, 0, 2))
     print("  thin 002:", [f"{v:.3e}" for v in I[:, j]])
     pins["truth"] = {"periods": list(TRUTH_PERIODS), "si110_002": I[:, j].tolist()}
