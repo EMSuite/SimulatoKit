@@ -1,8 +1,8 @@
 //
 //  BeamIntensitiesTests.swift
 //  Role: `BeamIntensities` by truths that need no fixture: the integer map between the crystal's hkl and the slab's grid,
-//        the incident beam, the forbidden 002 beam of Si [110] (zero kinematically, growing from zero dynamically), and
-//        the refusals. The pins against abTEM are in SimulatoKitParityTests.
+//        the incident beam, the forbidden 002 beam of Si [110] (zero kinematically, growing from zero dynamically), the
+//        lattice's reflections only (no centring-forbidden hkl, SimulatoKit#145), and the refusals. The pins against abTEM are in SimulatoKitParityTests.
 //
 
 import Foundation
@@ -97,6 +97,81 @@ struct BeamIntensitiesTests {
         // Beams come by |g|: the direct beam first.
         #expect(result.beams.first?.hkl == SIMD3(0, 0, 0))
         #expect(result.beams.allSatisfy { $0.hkl.x + $0.hkl.y == 0 }, "only the zero-order Laue zone of [110]")
+    }
+
+    /// The beams of a plane wave on the grid of `slab`'s box (one unit across).
+    static func beams(of slab: Slab, gpts: (Int, Int)) throws -> [BeamIntensities.Beam] {
+        let grid = try Grid(nx: gpts.0, ny: gpts.1, extentX: slab.structure.box.x, extentY: slab.structure.box.y)
+        let wave = Waves.planeWave(beam: try ElectronBeam(energy: 200e3), grid: grid)
+        return try BeamIntensities(exitWaves: [wave], of: slab, exitPlanes: .last).beams
+    }
+
+    /// SimulatoKit#145: the box grid of a centred cell holds points that are no reflection of the lattice (Si [0 0 1]:
+    /// 1 0 0, and 1 2̄1 0 where the first-order Laue zone's 1 2̄1 1 lands in projection). Every beam is a reflection of
+    /// the F lattice (all even or all odd), and the glide-forbidden 002 of [1 1 0] stays: a reflection, zero only
+    /// kinematically.
+    @Test func siliconBeamsAreReflectionsOfTheFLattice() throws {
+        let si = try Self.silicon()
+        func fcc(_ h: SIMD3<Int>) -> Bool {
+            let odd = [h.x, h.y, h.z].map { $0 & 1 }
+            return odd.allSatisfy { $0 == 0 } || odd.allSatisfy { $0 == 1 }
+        }
+        for (zone, gpts) in [(SIMD3(0, 0, 1), (28, 28)), (SIMD3(1, 1, 0), (28, 40)), (SIMD3(1, 1, 1), (40, 68))] {
+            let slab = try SlabBuilder.slab(of: si, zoneAxis: zone, thickness: 8)
+            let beams = try Self.beams(of: slab, gpts: gpts)
+            #expect(beams.count > 5, "\(zone) \(beams.count) beams")
+            let forbidden = beams.map(\.hkl).filter { !fcc($0) }
+            #expect(forbidden.isEmpty, "\(zone) lists \(forbidden.count) beams the F lattice forbids, e.g. \(forbidden.prefix(3))")
+            #expect(beams.allSatisfy { BeamIntensities.isReflection($0.hkl, in: slab) })
+        }
+        let s001 = try SlabBuilder.slab(of: si, zoneAxis: SIMD3(0, 0, 1), thickness: 8)
+        #expect(!BeamIntensities.isReflection(SIMD3(1, 0, 0), in: s001))
+        #expect(!BeamIntensities.isReflection(SIMD3(1, -21, 0), in: s001))
+        #expect(BeamIntensities.isReflection(SIMD3(2, 2, 0), in: s001))
+        #expect(BeamIntensities.isReflection(SIMD3(1, -21, 1), in: s001))
+        let s110 = try SlabBuilder.slab(of: si, zoneAxis: SIMD3(1, 1, 0), thickness: 8)
+        let beams110 = try Self.beams(of: s110, gpts: (28, 40))
+        #expect(beams110.contains { $0.hkl == SIMD3(0, 0, 2) }, "the glide-forbidden 002 stays a beam")
+        #expect(!beams110.contains { $0.hkl == SIMD3(1, -1, 0) }, "1 -1 0 is no reflection of the F lattice")
+    }
+
+    /// The centring found from the atoms, whatever the letters: F (Si) has three translations, I (Fe) one, a primitive
+    /// cell (hcp Mg, whose second atom is related by a screw, not a translation) none.
+    @Test func latticeTranslationsAreTheCellsCentring() throws {
+        let si = try Self.silicon()
+        let unit = try SlabBuilder.orthogonalUnit(of: si, zoneAxis: SIMD3(1, 1, 0))
+        let tSi = BeamIntensities.latticeTranslations(of: unit)
+        #expect(tSi.count == 3, "Si: \(tSi)")
+        for t in tSi {
+            let halves = [t.x, t.y, t.z].map { v -> Double in let w = v - v.rounded(.down); return min(w, 1 - w) }
+            #expect(halves.filter { abs($0 - 0.5) <= 1e-6 }.count == 2 && halves.filter { $0 <= 1e-6 }.count == 1, "Si \(t)")
+        }
+
+        let fe = try CrystalCell(a: SIMD3(2.8665, 0, 0), b: SIMD3(0, 2.8665, 0), c: SIMD3(0, 0, 2.8665),
+                                 sites: [CrystalCell.Site(atomicNumber: 26, fractional: SIMD3(0, 0, 0)),
+                                         CrystalCell.Site(atomicNumber: 26, fractional: SIMD3(0.5, 0.5, 0.5))])
+        let feSlab = try SlabBuilder.slab(of: fe, zoneAxis: SIMD3(0, 0, 1), thickness: 8)
+        #expect(BeamIntensities.latticeTranslations(of: feSlab.unit).count == 1)
+        #expect(!BeamIntensities.isReflection(SIMD3(1, 0, 0), in: feSlab))
+        #expect(BeamIntensities.isReflection(SIMD3(1, 1, 0), in: feSlab))
+        let feBeams = try Self.beams(of: feSlab, gpts: (16, 16))
+        #expect(feBeams.allSatisfy { ($0.hkl.x + $0.hkl.y + $0.hkl.z) % 2 == 0 }, "Fe [001]: h + k + l even")
+
+        // A coordinate on a half step of the 1e-4 hash (0.12345, 0.62345): the I translation is still found.
+        let feO = try CrystalCell(a: SIMD3(2.8665, 0, 0), b: SIMD3(0, 2.8665, 0), c: SIMD3(0, 0, 2.8665),
+                                  sites: [CrystalCell.Site(atomicNumber: 26, fractional: SIMD3(0, 0, 0)),
+                                          CrystalCell.Site(atomicNumber: 26, fractional: SIMD3(0.5, 0.5, 0.5)),
+                                          CrystalCell.Site(atomicNumber: 8, fractional: SIMD3(0.12345, 0, 0)),
+                                          CrystalCell.Site(atomicNumber: 8, fractional: SIMD3(0.62345, 0.5, 0.5))])
+        let feOUnit = try SlabBuilder.orthogonalUnit(of: feO, zoneAxis: SIMD3(0, 0, 1))
+        #expect(BeamIntensities.latticeTranslations(of: feOUnit).count == 1, "the I translation on a half-step coordinate")
+
+        let a = 3.209, c = 5.211
+        let mg = try CrystalCell(a: SIMD3(a, 0, 0), b: SIMD3(-a / 2, a * 3.0.squareRoot() / 2, 0), c: SIMD3(0, 0, c),
+                                 sites: [CrystalCell.Site(atomicNumber: 12, fractional: SIMD3(1.0 / 3, 2.0 / 3, 0.25)),
+                                         CrystalCell.Site(atomicNumber: 12, fractional: SIMD3(2.0 / 3, 1.0 / 3, 0.75))])
+        let mgUnit = try SlabBuilder.orthogonalUnit(of: mg, zoneAxis: SIMD3(0, 0, 1))
+        #expect(BeamIntensities.latticeTranslations(of: mgUnit).isEmpty)
     }
 
     @Test func refusesWavesThatDoNotFitTheSlab() throws {

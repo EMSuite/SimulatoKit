@@ -1,7 +1,8 @@
 //
 //  BeamIntensitiesPinsTests.swift
-//  Role: `BeamIntensities` against abTEM 1.0.10 `index_diffraction_spots` (tools/pins/beam-intensities/pins.py): Si [110],
-//        Si [111] and Mg [0001] at 200 kV, five thicknesses from about 2 to 100 nm. The hkl of every beam and its pixel
+//  Role: `BeamIntensities` against abTEM 1.0.10 `index_diffraction_spots` with the lattice's `centering`
+//        (tools/pins/beam-intensities/pins.py): Si [110], Si [111], Mg [0001] and Si [001] at 200 kV, five thicknesses from
+//        about 2 to 100 nm; no beam the F lattice forbids (SimulatoKit#145). The hkl of every beam and its pixel
 //        exact; every intensity within 1e-10 of the incident beam (the kit's exit-wave pin, 1e-10 of max with abTEM's
 //        float32 pi). The thin Si [110] series holds the forbidden 002 beam growing from zero.
 //
