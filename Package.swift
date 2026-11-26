@@ -45,8 +45,9 @@ let package = Package(
         .executableTarget(name: "SimulatoExample",
                           dependencies: ["SimulatoCore", "SimulatoMultislice", "SimulatoProbe", "SimulatoDetector"],
                           path: "Examples/SimulatoExample", exclude: ["Al.cif"], swiftSettings: settings),
-        // Test support both test sides use (relative-difference helpers); not a product.
-        .target(name: "SimulatoKitTestSupport", dependencies: ["SimulatoCore"], path: "Tests/SimulatoKitTestSupport",
+        // Test support both test sides use (relative-difference helpers, the beam matrix runner); not a product.
+        .target(name: "SimulatoKitTestSupport", dependencies: ["SimulatoCore", "SimulatoMultislice"],
+                path: "Tests/SimulatoKitTestSupport",
                 swiftSettings: settings),
         .testTarget(name: "SimulatoCoreTests", dependencies: ["SimulatoCore"], swiftSettings: settings),
         .testTarget(name: "SimulatoMultisliceTests",

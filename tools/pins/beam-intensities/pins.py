@@ -91,6 +91,31 @@ def slab_atoms(u, periods):
     return ase.Atoms(numbers=numbers, positions=positions, cell=box, pbc=True), k, h
 
 
+class NamesDiffer(Exception):
+    """abTEM names a pixel the kit selects by another (higher-order Laue zone) reflection: the pattern reaches past the
+    midpoint of the excitation errors. A caller can try a coarser sampling."""
+
+
+def reflects(hkl, centering):
+    """The lattice's reflection condition by its centring letter (abTEM 1.0.10's get_reflection_condition for P, F and I;
+    its A, B and C branches raise, so they are written out here: C forbids an odd h + k, A an odd k + l, B an odd h + l)."""
+    h, k, l = (int(v) for v in hkl)
+    c = centering.upper()
+    if c == "P":
+        return True
+    if c == "F":
+        return h % 2 == k % 2 == l % 2
+    if c == "I":
+        return (h + k + l) % 2 == 0
+    if c == "C":
+        return (h + k) % 2 == 0
+    if c == "A":
+        return (k + l) % 2 == 0
+    if c == "B":
+        return (h + l) % 2 == 0
+    raise ValueError(centering)
+
+
 def kit_beams(V, box, gpts, crop, centering):
     """The kit's rule: every hkl with (V hkl)_z = 0 that the centred lattice reflects (abTEM's `get_reflection_condition`)
     on a pixel of the cropped pattern, |g| at most the pattern's largest frequency (abTEM's default g_max, the larger of the
@@ -110,14 +135,17 @@ def kit_beams(V, box, gpts, crop, centering):
                 continue
             r = r.astype(int)
             assert (np.array(V) @ r).tolist() == [px, py, 0]
-            if not get_reflection_condition(r[None, :], centering)[0]:
+            ok = reflects(r, centering)
+            if centering.upper() in ("P", "F", "I"):
+                assert bool(get_reflection_condition(r[None, :], centering)[0]) == ok, (r, centering)
+            if not ok:
                 continue
             beams.append((g, tuple(int(v) for v in r), px, py))
     beams.sort(key=lambda b: (round(b[0], 9), b[1]))
     return beams
 
 
-def run_case(atoms0, uvw, periods_list, sampling, centering):
+def run_case(atoms0, uvw, periods_list, sampling, centering, energy=ENERGY):
     n, u = unit_of(atoms0, uvw)
     V = u["supercell"]
     period = u["box"][2]
@@ -128,15 +156,17 @@ def run_case(atoms0, uvw, periods_list, sampling, centering):
     planes = tuple(p * k - 1 for p in periods_list)
     pot = abtem.Potential(atoms, gpts=gpts, slice_thickness=[h] * (k * periods), projection="infinite",
                           exit_planes=planes)
-    waves = abtem.PlaneWave(energy=ENERGY).multislice(pot).compute()
+    waves = abtem.PlaneWave(energy=energy).multislice(pot).compute()
     patterns = waves.diffraction_patterns()
     crop = patterns.array.shape[-2:]
     cell = np.linalg.inv(np.array(V, dtype=float)) @ np.diag(u["box"])  # crystal a, b, c in the box frame
     # abTEM's default sg_max (estimate_necessary_excitation_error) drops zero-order beams beyond sqrt(2 g_max) 1/A; the
     # largest zero-order excitation error on the pattern, lambda g_max^2 / 2, keeps them all.
     g_max = max(patterns.max_frequency)
-    sg_max = 0.5 * abtem.core.energy.energy2wavelength(ENERGY) * g_max ** 2 * (1 + 1e-6)
-    indexed = patterns.index_diffraction_spots(cell=cell, sg_max=sg_max, centering=centering)
+    sg_max = 0.5 * abtem.core.energy.energy2wavelength(energy) * g_max ** 2 * (1 + 1e-6)
+    # abTEM's own centring where its rule works (P, F, I); a C, A or B lattice is indexed as P, the kit's rule drops the rest.
+    abtem_centering = centering if centering.upper() in ("P", "F", "I") else "P"
+    indexed = patterns.index_diffraction_spots(cell=cell, sg_max=sg_max, centering=abtem_centering)
     abtem_hkl = np.asarray(indexed.miller_indices, dtype=int)
     abtem_values = np.asarray(indexed.array)  # (planes, spots), zero where the overlap rule gave the pixel to another
     # abTEM's own pixel of each indexed reflection (`_find_projected_pixel_index`) and its winner per pixel (the
@@ -145,7 +175,7 @@ def run_case(atoms0, uvw, periods_list, sampling, centering):
     from abtem.bloch.utils import excitation_errors, reciprocal_cell
     g_vec = abtem_hkl @ reciprocal_cell(cell)
     nm = _find_projected_pixel_index(g_vec, crop, patterns.sampling)
-    winner = overlapping_spots_mask(nm, excitation_errors(g_vec, ENERGY))
+    winner = overlapping_spots_mask(nm, excitation_errors(g_vec, energy))
     label = {}
     for i in np.flatnonzero(winner):
         label[(int(nm[i, 0]) - crop[0] // 2, int(nm[i, 1]) - crop[1] // 2)] = i
@@ -156,7 +186,7 @@ def run_case(atoms0, uvw, periods_list, sampling, centering):
     full = np.abs(np.fft.fft2(np.asarray(waves.array) / (gpts[0] * gpts[1]))) ** 2
     for j, (_, hkl, px, py) in enumerate(beams):
         if (px, py) not in label:
-            raise SystemExit(f"{uvw}: abTEM indexes nothing on the pixel of {hkl} {px} {py}")
+            raise NamesDiffer(f"{uvw}: abTEM indexes nothing on the pixel of {hkl} {px} {py}")
         i = label[(px, py)]
         intensities[:, j] = abtem_values[:, i]
         labels.append([int(v) for v in abtem_hkl[i]])
@@ -170,7 +200,7 @@ def run_case(atoms0, uvw, periods_list, sampling, centering):
     # kit names it by its zero-order hkl. The pinned grids keep the ring outside the pattern, so the names agree.
     holz = [(hkl, lab) for (_, hkl, _, _), lab in zip(beams, labels) if tuple(lab) != hkl]
     if holz:
-        raise SystemExit(f"{uvw}: abTEM names {len(holz)} pixels by another reflection, e.g. {holz[:3]}")
+        raise NamesDiffer(f"{uvw}: abTEM names {len(holz)} pixels by another reflection, e.g. {holz[:3]}")
     thick = [p * period for p in periods_list]
     print(f"{atoms0.get_chemical_formula()} {uvw}: reps {n} V {V} box {np.round(box[:2], 4).tolist()} gpts {gpts} "
           f"crop {crop} slices {k * periods} beams {len(beams)} thick {np.round(np.array(thick) / 10, 2).tolist()} nm")
