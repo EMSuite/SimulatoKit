@@ -6,6 +6,18 @@ what a consumer must change under **Migration**. Every version below is a git ta
 release-please writes each entry from the merged pull requests' titles, and a breaking change's Migration is its
 `BREAKING CHANGE:` note.
 
+## [0.8.1](https://github.com/EMSuite/SimulatoKit/compare/0.8.0...0.8.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* dynamical beams are reflections of the lattice only, so Si [001] no longer lists the fcc-forbidden 1 2̄1 0 ([#146](https://github.com/EMSuite/SimulatoKit/issues/146)) ([4131937](https://github.com/EMSuite/SimulatoKit/commit/413193731b81f2efb614aff16924536e809ee52d))
+
+
+### Fixtures and tests
+
+* the beam matrix pins 74 dynamical cases of eleven crystals against abTEM ([#150](https://github.com/EMSuite/SimulatoKit/issues/150)) ([4d0eaf1](https://github.com/EMSuite/SimulatoKit/commit/4d0eaf1bff89b682ec68d81526606b8ab3532a36))
+
 ## [0.8.0](https://github.com/EMSuite/SimulatoKit/compare/0.7.1...0.8.0) (2026-11-25)
 
 
